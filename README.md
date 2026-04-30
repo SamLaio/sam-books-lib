@@ -110,7 +110,7 @@
 2. `site/config.env`
 
 如果是 Docker 啟動：
-- `docker-compose.yml` 或 `docker-composer-online.yml` 的 `environment` 會覆蓋 `site/config.env`
+- `docker-compose.yml` 的 `environment` 會覆蓋 `site/config.env`
 
 語系目前優先順序：
 
