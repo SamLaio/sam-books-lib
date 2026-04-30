@@ -121,7 +121,7 @@
 
 ## 重要設定
 
-以下是目前最常用的設定：
+以下是目前最常用的設定範例：
 
 ```env
 CALIBRE_LIBRARY_PATH=/books
@@ -156,16 +156,242 @@ SCAN_TMP_SQLITE_PATH=/tmp/books-scan.tmp.sqlite
 SCAN_WATCHDOG_TIMEOUT_SECONDS=180
 ```
 
-### 補充
+### 站台設定
 
-- `AUTH_USERNAME` / `AUTH_PASSWORD`
-  - 只在預設管理員 seed 時使用
-  - 目前不會在每次請求都覆寫 DB 中的管理員資料
+- `CALIBRE_LIBRARY_PATH`
+  - 書庫在容器內的掛載路徑
+  - Docker 模式通常固定填 `/books`
+  - 掃描與下載都會以這個路徑為根目錄
+
+- `SITE_TITLE`
+  - 網站標題
+  - 會套用到：
+    - 頁面標題
+    - OPDS feed 名稱
+    - 測試信件 / 寄送信件標題
+
+- `APP_LOCALE`
+  - 預設介面語系
+  - 目前支援：
+    - `zhTW`
+    - `en`
+  - 這是最低層預設值，實際顯示仍可能被「DB 預設語系」或「使用者個別語系」覆蓋
+
+- `SITE_BASE_URL`
+  - 站台對外網址
+  - 主要用在：
+    - OPDS 連結產生
+    - OPDS token URL
+  - 建議填可從閱讀器、手機或區網裝置實際連到的完整網址
+  - 不要加結尾 `/`
+
+- `SITE_DEFAULT_THEME`
+  - 預設主題
+  - 可用值：
+    - `light`
+    - `dark`
+  - 當使用者尚未設定個人主題時，會使用這個值
+
+- `CATALOG_DEFAULT_SORT_FIELD`
+  - 書目列表預設排序欄位
+  - 可用值：
+    - `is_read`
+    - `title`
+    - `author`
+    - `series`
+    - `added_at`
+
+- `CATALOG_DEFAULT_SORT_DIRECTION`
+  - 書目列表預設排序方向
+  - 可用值：
+    - `asc`
+    - `desc`
+
+- `OPDS_PAGE_SIZE`
+  - OPDS 單頁輸出上限
+  - 建議值：`20`、`30`、`50`
+  - 範圍：`1 ~ 500`
+  - 太大會讓閱讀器載入變慢
+
+### SMTP 設定
+
+- `SMTP_HOST`
+  - SMTP 主機名稱或 IP
+  - 例如：
+    - `smtp.gmail.com`
+    - `mail.example.com`
+
+- `SMTP_PORT`
+  - SMTP 連接埠
+  - 常見值：
+    - `25`
+    - `465`
+    - `587`
+
+- `SMTP_ENCRYPTION`
+  - SMTP 加密方式
+  - 可用值：
+    - `none`
+    - `tls`
+    - `ssl`
+  - Gmail 常見組合：
+    - `587 + tls`
+    - `465 + ssl`
+
+- `SMTP_USERNAME`
+  - SMTP 登入帳號
+  - 若是 email 服務，通常就是寄件者信箱
+
+- `SMTP_PASSWORD`
+  - SMTP 登入密碼
+  - 若使用 Gmail，通常應填 App Password，不是一般登入密碼
+
+SMTP 補充規則：
+
+- 若 DB 尚未設定 SMTP，啟動時會把 env / compose 的值初始化進 DB
+- 一旦管理員在 UI 更新過 SMTP，之後不會在每次啟動時被 env 值覆蓋
+- 只有 SMTP 設定完整，且使用者本身有 email 時，前端才會出現寄送功能
+
+### 登入與帳號設定
+
+- `AUTH_ENABLED`
+  - 是否啟用登入制度
+  - 可用值：
+    - `1`
+    - `0`
+  - `1` 時：
+    - Web 需登入
+    - OPDS 需 Basic Auth 或 token
+
+- `AUTH_USERNAME`
+  - 預設管理員帳號
+  - 只用於「建立 / 補 seed 預設管理員」
+  - 不再於每次請求覆寫 DB 中使用者資料
+
+- `AUTH_PASSWORD`
+  - 預設管理員密碼
+  - 與 `AUTH_USERNAME` 一樣，只用於 seed 預設管理員
+  - 現在不會在每次頁面請求時把資料庫中的密碼再覆蓋回去
+
 - `AUTH_EMAIL`
-  - 只有明確設定時才會覆寫預設管理員 email
-- `SMTP_*`
-  - 若 DB 尚未設定 SMTP，啟動時會把 env/compose 的值初始化進 DB
-  - 之後管理員在 UI 修改後，不會被每次啟動覆蓋
+  - 預設管理員 email
+  - 只有在明確設定非空值時，才會在 seed 管理員時寫入 / 覆寫
+  - 若留空，不會把現有 email 洗成空字串
+
+- `AUTH_SECRET_KEY`
+  - 密碼 pepper / 加密密鑰
+  - 若未設定，系統會在 `data/auth.key` 自動產生
+  - 換掉這個值後，舊密碼驗證可能受影響，正式環境不建議隨意變更
+
+### SQLite / Migration 設定
+
+- `AUTH_SETTINGS_DB_PATH`
+  - 帳號設定資料庫路徑
+  - 目前內容包含：
+    - `users`
+    - `app_settings`
+    - `scan_jobs`
+
+- `MIGRATIONS_DB_PATH`
+  - migration 記錄資料庫路徑
+  - 專門記錄：
+    - `auth`
+    - `library`
+    兩組 migration 歷程與失敗紀錄
+
+- `SQLITE_INDEX_PATH`
+  - 書庫索引資料庫路徑
+  - 目前內容包含：
+    - `books`
+    - `book_paths`
+    - `meta`
+    - `books_fts`
+
+路徑補充：
+
+- 相對路徑一律以 `site/` 為基準
+- 若用 Docker，通常會讓這些 DB 都落在 `/var/www/html/data`
+
+### 掃描設定
+
+- `SCAN_INTERVAL_MINUTES`
+  - 自動掃描最小間隔，單位為分鐘
+  - 容器內 cron 每分鐘都會叫一次 `job.php --cron`
+  - 但只有超過這個間隔才會真正執行掃描
+  - `0` 代表完全關閉自動掃描，只保留手動重建
+
+- `SCAN_BATCH_SIZE`
+  - 單次 transaction / 寫入批次大小
+  - 建議值：
+    - `20`
+    - `50`
+    - `100`
+  - 太小會增加 transaction 次數，太大則會提高單次 I/O 與記憶體壓力
+
+- `SCAN_MAX_BOOKS_PER_RUN`
+  - 每輪掃描最多處理幾本「不在 calibre db 中的 fs 書目」
+  - `0` 代表不限制
+  - 大書庫建議保留 `500` 左右，避免單次掃描拖太久
+
+- `SCAN_TMP_SQLITE_PATH`
+  - 掃描暫存 SQLite 路徑
+  - 建議維持 `/tmp/books-scan.tmp.sqlite`
+  - 放在容器內 `/tmp`，可以減少 bind mount 磁碟 I/O 問題
+
+- `SCAN_WATCHDOG_TIMEOUT_SECONDS`
+  - 掃描 watchdog 逾時秒數
+  - 若舊掃描程序長時間卡住，會由 watchdog 嘗試中止
+  - `0` 代表停用 watchdog
+
+### 容器 / PHP 設定
+
+- `PUID`
+  - 容器對 `data/`、`thumb/` 修權限時使用的 uid
+  - 若是 NAS 或 Linux 主機，應改成實際檔案擁有者的 uid
+
+- `PGID`
+  - 容器對 `data/`、`thumb/` 修權限時使用的 gid
+
+- `TZ`
+  - 容器時區
+  - 建議正式使用時改成你的所在地，例如：
+    - `Asia/Taipei`
+
+- `WEBHOME`
+  - base image 使用的網站根目錄
+  - 目前固定為 `/var/www/html`
+  - 一般不需要改
+
+- `PHP_PM`
+  - PHP-FPM process manager 模式
+  - 目前預設：
+    - `ondemand`
+
+- `PHP_PM_MAX_CHILDREN`
+  - 同時可處理的 PHP worker 數量
+  - 目前專案預設壓得比較保守，方便低記憶體環境使用
+
+- `PHP_PM_START_SERVERS`
+- `PHP_PM_MIN_SPARE_SERVERS`
+- `PHP_PM_MAX_SPARE_SERVERS`
+  - PHP-FPM 行為參數
+  - 主要影響程序預熱與待命策略
+
+- `PHP_PM_MAX_REQUESTS`
+  - 每個 worker 最多處理幾次請求後重建
+  - 可降低長時間運行的 memory leak 累積風險
+
+- `PHP_MEMORY_LIMIT`
+  - 單個 PHP 程序記憶體上限
+  - 目前預設 `64M`
+  - 若後續要提高併發或容納更大查詢，可再調整
+
+- `PHP_OPCACHE_ENABLE`
+  - 是否啟用 OPcache
+  - 目前預設 `0`
+
+- `COMPOSER_ROOT_VERSION`
+  - 避免容器內啟動 composer 時出現 root package version warning
 
 ## Docker 啟動
 
