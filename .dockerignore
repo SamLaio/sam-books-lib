@@ -1,0 +1,15 @@
+.git
+.history
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+site/data
+site/data/*.active
+site/data/*.secret
+site/data/*.key
+site/data/*.tmp-*
+site/data/*.backup-*
+site/data/*.corrupt-*
+thumb/*
+site/thumb
+*.log

@@ -1,0 +1,17 @@
+{
+  "name": "samliao/calibre-folder-reader",
+  "description": "PHP reader for Calibre library folder structure.",
+  "type": "library",
+  "autoload": {
+    "psr-4": {
+      "Calibre\\": "src/"
+    }
+  },
+  "require": {
+    "php": ">=7.4"
+  },
+  "config": {
+    "allow-plugins": {
+    }
+  }
+}

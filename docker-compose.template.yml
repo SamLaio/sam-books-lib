@@ -1,0 +1,90 @@
+name: sam-books-lib
+services:
+  sam-books-lib:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    pull_policy: never
+    image: sam/bookslib:latest
+    container_name: sam-books-lib
+    hostname: sam-books-lib
+    restart: unless-stopped
+    mem_limit: 256m
+    cpu_shares: 90
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    ports:
+      - target: 80
+        published: "8083"
+        protocol: tcp
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/index.php >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    environment:
+      # ===== 站台設定 =====
+      - CALIBRE_LIBRARY_PATH=/books
+      - SITE_TITLE=SamBooksLib
+      - APP_LOCALE=zhTW
+      - SITE_BASE_URL=http://127.0.0.1:8083
+      - SITE_DEFAULT_THEME=light
+      - CATALOG_DEFAULT_SORT_FIELD=added_at
+      - CATALOG_DEFAULT_SORT_DIRECTION=desc
+      - OPDS_PAGE_SIZE=30
+
+      # ===== SMTP 設定 =====
+      - SMTP_HOST=
+      - SMTP_PORT=
+      - SMTP_ENCRYPTION=none
+      - SMTP_USERNAME=
+      - SMTP_PASSWORD=
+
+      # ===== 登入設定 =====
+      - AUTH_ENABLED=1
+      - AUTH_USERNAME=admin
+      - AUTH_PASSWORD=password123
+      - AUTH_EMAIL=
+      - AUTH_SETTINGS_DB_PATH=data/auth_settings.sqlite
+      - MIGRATIONS_DB_PATH=data/migrations.sqlite
+      - AUTH_SECRET_KEY=
+
+      # ===== 掃描設定 =====
+      - SQLITE_INDEX_PATH=data/library_index.sqlite
+      - SCAN_INTERVAL_MINUTES=5
+      - SCAN_BATCH_SIZE=50
+      - SCAN_MAX_BOOKS_PER_RUN=500
+      - SCAN_TMP_SQLITE_PATH=/tmp/books-scan.tmp.sqlite
+      - SCAN_WATCHDOG_TIMEOUT_SECONDS=180
+
+      # ===== 容器設定 =====
+      - HOME=/root
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Taipei
+      - WEBHOME=/var/www/html
+      - PHP_PM=ondemand
+      - PHP_PM_MAX_CHILDREN=1
+      - PHP_PM_START_SERVERS=1
+      - PHP_PM_MIN_SPARE_SERVERS=1
+      - PHP_PM_MAX_SPARE_SERVERS=1
+      - PHP_PM_MAX_REQUESTS=120
+      - PHP_MEMORY_LIMIT=64M
+      - PHP_OPCACHE_ENABLE=0
+      - COMPOSER_ROOT_VERSION=1.0.0
+    volumes:
+      # 持久化資料（SQLite、log、thumb）
+      - type: bind
+        source: ./site/data
+        target: /var/www/html/data
+      # Calibre 書庫掛載路徑，請改成你的主機實際路徑
+      - type: bind
+        source: /path/to/your/CalibreLib
+        target: /books
+    devices: []
+    cap_add: []
+    network_mode: bridge
+    privileged: false
