@@ -1658,7 +1658,7 @@ class LibraryIndex
                     ':publisher' => $this->toString($metadata['publisher'] ?? ''),
                     ':language' => $this->toString($metadata['language'] ?? ''),
                     ':description' => $this->toString($metadata['description'] ?? ''),
-                    ':published_at' => $this->toString($metadata['pubdate'] ?? ''),
+                    ':published_at' => $this->toString($metadata['published_at'] ?? ($metadata['pubdate'] ?? '')),
                     ':series_index' => $this->toFloat($metadata['series_index'] ?? null),
                     ':uuid' => $this->toString($metadata['uuid'] ?? ''),
                     ':author_sort' => $this->toString($metadata['author_sort'] ?? ''),

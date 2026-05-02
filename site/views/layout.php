@@ -13,34 +13,30 @@ $assetUrl = static function (string $relativePath): string {
 };
 
 $resolvedTheme = 'light';
-$themeFromCookie = false;
 $themePersistToServer = false;
 $resolvedLocale = \Calibre\Support\Lang::currentLocale();
 $htmlLang = $resolvedLocale === 'en' ? 'en' : 'zh-Hant';
 $themeCookieName = \Calibre\Services\AuthService::THEME_COOKIE_NAME;
-if (isset($_COOKIE[$themeCookieName])) {
-    $cookieTheme = strtolower(trim((string) $_COOKIE[$themeCookieName]));
-    if (in_array($cookieTheme, ['light', 'dark'], true)) {
-        $resolvedTheme = $cookieTheme;
-        $themeFromCookie = true;
-    }
-}
+$themeCookieTsName = \Calibre\Services\AuthService::THEME_COOKIE_TS_NAME;
+$catalogStateCookieName = \Calibre\Services\AuthService::CATALOG_STATE_COOKIE_NAME;
+$requestedTheme = isset($_GET['theme']) ? (string) $_GET['theme'] : null;
 
-if (isset($currentTheme) && is_string($currentTheme)) {
-    $normalized = strtolower(trim($currentTheme));
-    if (!$themeFromCookie && in_array($normalized, ['light', 'dark'], true)) {
-        $resolvedTheme = $normalized;
-    }
-} else {
-    try {
-        $authService = new \Calibre\Services\AuthService(dirname(__DIR__));
-        $themePersistToServer = is_array($authService->getCurrentUser());
-        if (!$themeFromCookie) {
-            $resolvedTheme = $authService->getPreferredTheme();
+try {
+    $authService = new \Calibre\Services\AuthService(dirname(__DIR__));
+    $themePersistToServer = is_array($authService->getCurrentUser());
+    $resolvedTheme = $authService->resolvePreferredTheme($requestedTheme);
+} catch (\Throwable) {
+    $themePersistToServer = false;
+    if (is_string($requestedTheme)) {
+        $normalizedRequestedTheme = strtolower(trim($requestedTheme));
+        if (in_array($normalizedRequestedTheme, ['light', 'dark'], true)) {
+            $resolvedTheme = $normalizedRequestedTheme;
         }
-    } catch (\Throwable) {
-        $resolvedTheme = 'light';
-        $themePersistToServer = false;
+    } elseif (isset($_COOKIE[$themeCookieName])) {
+        $cookieTheme = strtolower(trim((string) $_COOKIE[$themeCookieName]));
+        if (in_array($cookieTheme, ['light', 'dark'], true)) {
+            $resolvedTheme = $cookieTheme;
+        }
     }
 }
 ?>
@@ -79,6 +75,8 @@ if (isset($currentTheme) && is_string($currentTheme)) {
   data-theme-persist="<?= $themePersistToServer ? '1' : '0' ?>"
   data-theme-cookie-enabled="1"
   data-theme-cookie-name="<?= $escape($themeCookieName) ?>"
+  data-theme-cookie-ts-name="<?= $escape($themeCookieTsName) ?>"
+  data-catalog-state-cookie-name="<?= $escape($catalogStateCookieName) ?>"
   aria-label="<?= $escape($t('layout.toggle_theme')) ?>"
   title="<?= $escape($t('layout.toggle_theme')) ?>"
 >

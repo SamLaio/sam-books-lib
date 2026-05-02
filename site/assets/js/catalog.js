@@ -7,6 +7,16 @@
   const searchForm = document.querySelector(".search-form");
   const scanRequestForm = document.querySelector("[data-scan-request-form]");
   const scanRequestButton = scanRequestForm?.querySelector("[data-scan-request-button]") || null;
+  const catalogStateCookieName = (themeToggleButton?.getAttribute("data-catalog-state-cookie-name") || "").trim();
+
+  const setCookieValue = (name, value, maxAge) => {
+    if (!name) {
+      return;
+    }
+
+    const secure = window.location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `${encodeURIComponent(name)}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; samesite=lax${secure}`;
+  };
 
   const isTypingTarget = (target) => {
     if (!(target instanceof HTMLElement)) {
@@ -106,18 +116,37 @@
     }
 
     const cookieName = (themeToggleButton.getAttribute("data-theme-cookie-name") || "").trim();
+    const cookieTsName = (themeToggleButton.getAttribute("data-theme-cookie-ts-name") || "").trim();
     if (cookieName === "") {
       return;
     }
 
-    const secure = window.location.protocol === "https:" ? "; secure" : "";
-    document.cookie = `${encodeURIComponent(cookieName)}=${encodeURIComponent(theme)}; path=/; max-age=31536000; samesite=lax${secure}`;
+    const timestamp = Math.floor(Date.now() / 1000);
+    setCookieValue(cookieName, theme, 31536000);
+    if (cookieTsName !== "") {
+      setCookieValue(cookieTsName, String(timestamp), 31536000);
+    }
+  };
+
+  const buildCurrentCatalogStateUrl = () => {
+    const url = new URL(`${window.location.pathname}${window.location.search}`, window.location.href);
+    url.searchParams.set("theme", normalizeTheme(document.body.getAttribute("data-theme") || "light"));
+    return `${url.pathname}${url.search}${url.hash}`;
+  };
+
+  const persistCatalogStateCookie = () => {
+    if (!catalogStateCookieName || !searchForm) {
+      return;
+    }
+
+    setCookieValue(catalogStateCookieName, buildCurrentCatalogStateUrl(), 2592000);
   };
 
   const applyTheme = (theme) => {
     const normalizedTheme = normalizeTheme(theme);
     document.body.setAttribute("data-theme", normalizedTheme);
     persistThemeCookie(normalizedTheme);
+    persistCatalogStateCookie();
 
     if (!themeToggleButton) {
       return normalizedTheme;
@@ -208,6 +237,8 @@
       }
     });
   }
+
+  persistCatalogStateCookie();
 
   if (scanRequestForm && scanRequestButton) {
     scanRequestForm.addEventListener("submit", async (event) => {
@@ -372,6 +403,22 @@
     const queryString = params.toString();
 
     return queryString ? `${action}?${queryString}` : action;
+  };
+
+  const buildCurrentCatalogBackUrl = () => buildCurrentCatalogStateUrl();
+
+  const applyBackToReaderUrl = (urlValue) => {
+    if (typeof urlValue !== "string" || urlValue.trim() === "") {
+      return "";
+    }
+
+    try {
+      const resolvedUrl = new URL(urlValue.trim(), window.location.href);
+      resolvedUrl.searchParams.set("back", buildCurrentCatalogBackUrl());
+      return `${resolvedUrl.pathname}${resolvedUrl.search}${resolvedUrl.hash}`;
+    } catch (_error) {
+      return urlValue.trim();
+    }
   };
 
   const isMobileLayout = () => window.matchMedia("(max-width: 900px)").matches;
@@ -733,19 +780,23 @@
 
     const directUrl = typeof book?.read_url === "string" ? book.read_url.trim() : "";
     if (directUrl !== "") {
-      const backUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
-      const resolvedUrl = new URL(directUrl, window.location.href);
-      if (!resolvedUrl.searchParams.has("back")) {
-        resolvedUrl.searchParams.set("back", backUrl);
-      }
       readLink.hidden = false;
-      readLink.setAttribute("href", resolvedUrl.toString());
+      readLink.setAttribute("href", applyBackToReaderUrl(directUrl));
       return;
     }
 
     readLink.hidden = true;
     readLink.setAttribute("href", "#");
   };
+
+  document.querySelectorAll("a.read-btn[href]").forEach((link) => {
+    const href = link.getAttribute("href") || "";
+    if (!/reader\.php/i.test(href)) {
+      return;
+    }
+
+    link.setAttribute("href", applyBackToReaderUrl(href));
+  });
 
   const setSendLink = (book) => {
     if (!sendLink || !canSendBookByEmail) {

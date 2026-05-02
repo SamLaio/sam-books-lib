@@ -25,7 +25,7 @@ $escape = static function ($value): string {
             <h1 class="reader-toolbar__title"><?= $escape(($readerBookTitle ?? '') !== '' ? $readerBookTitle : $t('common.read')) ?></h1>
             <p class="reader-toolbar__status" data-reader-status hidden><?= $escape($readerError ?? $t('reader.loading_manifest')) ?></p>
           </div>
-          <a class="btn secondary reader-toolbar__back" href="<?= $escape($backUrl ?? 'index.php') ?>"><?= $escape($t('common.back_home')) ?></a>
+          <a class="btn secondary reader-toolbar__back" data-reader-back-link href="<?= $escape($backUrl ?? 'index.php') ?>"><?= $escape($t('common.back_home')) ?></a>
         </div>
       </header>
 

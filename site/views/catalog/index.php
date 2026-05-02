@@ -293,14 +293,14 @@ $escape = static function ($value): string {
             <h2 class="book-dialog__title" data-book-detail-title>書籍簡介</h2>
           </div>
           <div class="book-dialog__actions">
-            <a class="btn secondary book-dialog__read action-text-btn" data-book-detail-read href="#" hidden title="<?= $escape($t('common.read')) ?>" aria-label="<?= $escape($t('common.read')) ?>">
+            <a class="btn read-btn action-text-btn book-dialog__read" data-book-detail-read href="#" hidden title="<?= $escape($t('common.read')) ?>" aria-label="<?= $escape($t('common.read')) ?>">
               <?= $escape($t('common.read')) ?>
             </a>
             <button type="button" class="book-dialog__close" data-book-dialog-close aria-label="<?= $escape($t('common.close')) ?>"><?= $escape($t('common.close')) ?></button>
-            <a class="btn book-dialog__download action-text-btn" data-book-detail-download href="#" hidden title="<?= $escape($t('common.download')) ?>" aria-label="<?= $escape($t('common.download')) ?>">
+            <a class="btn download-btn action-text-btn book-dialog__download" data-book-detail-download href="#" hidden title="<?= $escape($t('common.download')) ?>" aria-label="<?= $escape($t('common.download')) ?>">
               <?= $escape($t('common.download')) ?>
             </a>
-            <a class="btn send-btn book-dialog__send action-text-btn" data-book-detail-send href="#" hidden title="<?= $escape($t('common.send')) ?>" aria-label="<?= $escape($t('common.send')) ?>">
+            <a class="btn send-btn action-text-btn book-dialog__send" data-book-detail-send href="#" hidden title="<?= $escape($t('common.send')) ?>" aria-label="<?= $escape($t('common.send')) ?>">
               <?= $escape($t('common.send')) ?>
             </a>
           </div>

@@ -267,7 +267,9 @@ final class CatalogController
                 'read_url' => (isset($row['id']) && $this->hasReadableBook($row))
                     ? 'reader.php?id=' . (int) $row['id'] . '&back=' . rawurlencode($currentCatalogUrl)
                     : null,
-                'details_url' => isset($row['id']) ? 'book.php?id=' . (int) $row['id'] : null,
+                'details_url' => isset($row['id'])
+                    ? 'book.php?id=' . (int) $row['id'] . '&back=' . rawurlencode($currentCatalogUrl)
+                    : null,
                 'cover_preview_url' => $coverPreviewUrl,
                 'author_links' => $this->buildAuthorLinks((string) ($row['author'] ?? ''), $urlGenerator),
                 'series_link' => $this->buildSeriesLink((string) ($row['series'] ?? ''), $urlGenerator),

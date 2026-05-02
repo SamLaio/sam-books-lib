@@ -36,7 +36,7 @@ final class BookDetailsController
 
         try {
             $details = $this->bookDetailsService->getDetails((int) $bookId);
-            $details = $this->applyActionUrls($details);
+            $details = $this->applyActionUrls($details, $query['back'] ?? null);
             $this->respondJson($details);
         } catch (HttpException $e) {
             $this->respondJson(['error' => $e->getMessage()], $e->getStatusCode());
@@ -53,11 +53,12 @@ final class BookDetailsController
         exit;
     }
 
-    private function applyActionUrls(array $details): array
+    private function applyActionUrls(array $details, $back = null): array
     {
         $bookId = isset($details['id']) ? (int) $details['id'] : 0;
         $details['download_url'] = $bookId > 0 ? 'download.php?id=' . $bookId : null;
         $details['send_url'] = null;
+        $details['read_url'] = $this->appendBackToReadUrl($details['read_url'] ?? null, $back);
 
         if ($bookId < 1) {
             return $details;
@@ -76,5 +77,42 @@ final class BookDetailsController
         }
 
         return $details;
+    }
+
+    private function appendBackToReadUrl($readUrl, $back): ?string
+    {
+        if (!is_string($readUrl) || trim($readUrl) === '') {
+            return null;
+        }
+
+        $readUrl = trim($readUrl);
+        if (!is_string($back) || trim($back) === '') {
+            return $readUrl;
+        }
+
+        $parts = parse_url($readUrl);
+        if ($parts === false) {
+            return $readUrl;
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        $queryString = (string) ($parts['query'] ?? '');
+        $fragment = (string) ($parts['fragment'] ?? '');
+
+        parse_str($queryString, $params);
+        if (!isset($params['back']) || trim((string) $params['back']) === '') {
+            $params['back'] = trim($back);
+        }
+
+        $rebuilt = $path !== '' ? $path : 'reader.php';
+        $encodedQuery = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+        if ($encodedQuery !== '') {
+            $rebuilt .= '?' . $encodedQuery;
+        }
+        if ($fragment !== '') {
+            $rebuilt .= '#' . $fragment;
+        }
+
+        return $rebuilt;
     }
 }

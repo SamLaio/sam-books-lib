@@ -1196,6 +1196,26 @@ td.col-read {
   width: min(100%, 220px);
 }
 
+.book-dialog__read {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.book-dialog__close {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.book-dialog__download {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.book-dialog__send {
+  grid-column: 2;
+  grid-row: 2;
+}
+
 .book-dialog__actions .btn,
 .book-dialog__actions button {
   width: 100%;
@@ -1213,6 +1233,26 @@ td.col-read {
 .book-dialog__actions .btn.action-text-btn:hover,
 .book-dialog__actions .btn.action-text-btn:focus-visible,
 .book-dialog__actions .btn.action-text-btn:active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+.book-dialog__actions .book-dialog__read,
+.book-dialog__actions .book-dialog__read:visited,
+.book-dialog__actions .book-dialog__read:hover,
+.book-dialog__actions .book-dialog__read:focus-visible,
+.book-dialog__actions .book-dialog__read:active,
+.book-dialog__actions .book-dialog__download,
+.book-dialog__actions .book-dialog__download:visited,
+.book-dialog__actions .book-dialog__download:hover,
+.book-dialog__actions .book-dialog__download:focus-visible,
+.book-dialog__actions .book-dialog__download:active,
+.book-dialog__actions .book-dialog__send,
+.book-dialog__actions .book-dialog__send:visited,
+.book-dialog__actions .book-dialog__send:hover,
+.book-dialog__actions .book-dialog__send:focus-visible,
+.book-dialog__actions .book-dialog__send:active {
   background: var(--accent) !important;
   color: #ffffff !important;
   border: 0 !important;

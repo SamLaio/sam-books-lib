@@ -493,6 +493,14 @@ final class MigrationRunner
                     $pdo->exec("UPDATE users SET role = 'admin' WHERE is_default = 1");
                 },
             ],
+            [
+                'name' => '202605020001_add_ui_theme_updated_at',
+                'signature' => 'add_ui_theme_updated_at_v1',
+                'up' => function (\PDO $pdo): void {
+                    $this->ensureColumn($pdo, 'users', 'ui_theme_updated_at', 'TEXT');
+                    $pdo->exec('UPDATE users SET ui_theme_updated_at = COALESCE(NULLIF(ui_theme_updated_at, ""), updated_at, CURRENT_TIMESTAMP)');
+                },
+            ],
         ];
     }
 

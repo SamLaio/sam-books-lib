@@ -46,18 +46,13 @@ class CalibreLibrary
             yield from $this->iterateFromDatabase($metadataDbPath);
         }
 
-        // If every filesystem book path is already represented by calibre metadata.db,
-        // skip the filesystem pass entirely.
+        // Even with calibre metadata available, loose books may exist anywhere under the
+        // library tree, not only directly under /books. Keep the filesystem pass, but
+        // short-circuit it entirely when every filesystem path is already covered.
         if ($hasMetadataDb && $this->databaseKnownBookPaths !== []) {
-            // With calibre metadata available, only scan loose books under library root.
-            // This avoids expensive full-tree traversal and still catches non-calibre files
-            // directly dropped into /books.
-            if (!$this->hasLooseFilesystemBookOutsideDatabase()) {
+            if (!$this->hasFilesystemBookOutsideDatabase()) {
                 return;
             }
-
-            yield from $this->iterateFromFilesystem(true);
-            return;
         }
 
         yield from $this->iterateFromFilesystem();
@@ -205,6 +200,11 @@ class CalibreLibrary
         ");
 
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $relativeBookPath = str_replace('\\', '/', (string) ($row['path'] ?? ''));
+            if ($this->isExcludedLibraryPath($relativeBookPath)) {
+                continue;
+            }
+
             $bookPath = $this->rootPath . DIRECTORY_SEPARATOR . $row['path'];
             $formats = $this->findFormats($bookPath);
             foreach ($formats as $formatPath) {
@@ -218,11 +218,7 @@ class CalibreLibrary
             }
             $this->rememberDatabaseBookPath($primaryPath);
             $sourceMtime = $this->resolveSourceMtime($bookPath);
-            $cachedBook = $this->buildBookFromCache($primaryPath, $sourceMtime);
-            if ($cachedBook !== null) {
-                yield $cachedBook;
-                continue;
-            }
+            $publishedAt = $this->normalizeMetadataDate($row['pubdate'] ?? null);
             $metadata = [
                 'title' => $row['title'],
                 'author' => $row['authors'] ?: 'Unknown',
@@ -233,7 +229,8 @@ class CalibreLibrary
                 'publisher' => $this->normalizeCsvField($row['publishers'] ?? ''),
                 'language' => $this->normalizeCsvField($row['languages'] ?? ''),
                 'description' => $this->normalizeDescription($row['description'] ?? null),
-                'pubdate' => $this->normalizeMetadataDate($row['pubdate'] ?? null),
+                'pubdate' => $publishedAt,
+                'published_at' => $publishedAt,
                 'series_index' => $this->normalizeSeriesIndex($row['series_index'] ?? null),
                 'uuid' => $this->toNullableString($row['uuid'] ?? null),
                 'author_sort' => $this->toNullableString($row['author_sort'] ?? null),
@@ -272,6 +269,10 @@ class CalibreLibrary
         $ebookFormats = $this->getEbookFormats();
 
         foreach ($this->iterateFilesystemDirectories($rootOnly) as $directory) {
+            if ($this->isExcludedLibraryPath($directory)) {
+                continue;
+            }
+
             $groups = $this->collectBookGroupsInDirectory($directory, $ebookFormats);
             if ($groups === []) {
                 continue;
@@ -354,28 +355,6 @@ class CalibreLibrary
                 if (!$this->isBookPathFromDatabase($primaryPath)) {
                     return true;
                 }
-            }
-        }
-
-        return false;
-    }
-
-    private function hasLooseFilesystemBookOutsideDatabase(): bool
-    {
-        $ebookFormats = $this->getEbookFormats();
-        foreach ($this->collectBookGroupsInDirectory($this->rootPath, $ebookFormats) as $group) {
-            $formats = $group['formats'] ?? [];
-            if (!is_array($formats) || $formats === []) {
-                continue;
-            }
-
-            $primaryPath = $this->pickPrimaryFormatPath($formats);
-            if ($primaryPath === '') {
-                continue;
-            }
-
-            if (!$this->isBookPathFromDatabase($primaryPath)) {
-                return true;
             }
         }
 
@@ -589,6 +568,10 @@ class CalibreLibrary
 
     private function collectBookGroupsInDirectory(string $directory, array $ebookFormats): array
     {
+        if ($this->isExcludedLibraryPath($directory)) {
+            return [];
+        }
+
         $files = @scandir($directory, SCANDIR_SORT_ASCENDING);
         if ($files === false) {
             return [];
@@ -629,6 +612,13 @@ class CalibreLibrary
     private function getEbookFormats(): array
     {
         return ['epub', 'mobi', 'azw3', 'pdf', 'cbz', 'azw', 'txt', 'html', 'rtf'];
+    }
+
+    private function isExcludedLibraryPath(string $path): bool
+    {
+        $normalized = str_replace('\\', '/', $path);
+
+        return preg_match('~(?:^|/)\.caltrash(?:/|$)~', $normalized) === 1;
     }
 
     private function ensureCover(string $bookPath, bool $hasCover, array $formats): ?string
@@ -1007,6 +997,8 @@ class CalibreLibrary
                 $authorSort = $this->readMetaByName($metadataNode, 'calibre:author_sort', $ns);
                 $libraryTimestamp = $this->readMetaByName($metadataNode, 'calibre:timestamp', $ns);
 
+                $normalizedPublishedAt = $this->normalizeMetadataDate($publishedAt);
+
                 return array_filter([
                     'title' => $title,
                     'author' => $creator,
@@ -1018,7 +1010,8 @@ class CalibreLibrary
                     'publisher' => $publisher,
                     'language' => $language,
                     'description' => $this->normalizeDescription($description),
-                    'pubdate' => $this->normalizeMetadataDate($publishedAt),
+                    'pubdate' => $normalizedPublishedAt,
+                    'published_at' => $normalizedPublishedAt,
                     'series_index' => $this->normalizeSeriesIndex($seriesIndex),
                     'uuid' => $uuid,
                     'author_sort' => $authorSort,
@@ -1098,6 +1091,8 @@ class CalibreLibrary
         $authorSort = $this->readMetaByName($metadataNode, 'calibre:author_sort', $ns);
         $libraryTimestamp = $this->readMetaByName($metadataNode, 'calibre:timestamp', $ns);
 
+        $normalizedPublishedAt = $this->normalizeMetadataDate($publishedAt);
+
         return array_filter([
             'title' => $title,
             'author' => $creator,
@@ -1109,7 +1104,8 @@ class CalibreLibrary
             'publisher' => $publisher,
             'language' => $language,
             'description' => $this->normalizeDescription($description),
-            'pubdate' => $this->normalizeMetadataDate($publishedAt),
+            'pubdate' => $normalizedPublishedAt,
+            'published_at' => $normalizedPublishedAt,
             'series_index' => $this->normalizeSeriesIndex($seriesIndex),
             'uuid' => $uuid,
             'author_sort' => $authorSort,

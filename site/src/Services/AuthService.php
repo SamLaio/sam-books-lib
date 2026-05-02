@@ -11,9 +11,12 @@ final class AuthService
     public const ROLE_ADMIN = 'admin';
     public const ROLE_USER = 'user';
     public const THEME_COOKIE_NAME = 'books_theme';
+    public const THEME_COOKIE_TS_NAME = 'books_theme_ts';
+    public const CATALOG_STATE_COOKIE_NAME = 'books_catalog_state';
     public const SORT_FIELD_COOKIE_NAME = 'books_sort_field';
     public const SORT_DIRECTION_COOKIE_NAME = 'books_sort_direction';
     private const THEME_COOKIE_TTL = 31536000;
+    private const CATALOG_STATE_COOKIE_TTL = 2592000;
     private const SORT_COOKIE_TTL = 31536000;
     private const ALLOWED_SORT_FIELDS = ['is_read', 'title', 'author', 'series', 'added_at'];
 
@@ -240,7 +243,7 @@ final class AuthService
         }
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, email, role, is_enabled, api_token, ui_theme, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
+            'SELECT id, username, email, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
              FROM users
              WHERE id = :id
              LIMIT 1'
@@ -329,10 +332,10 @@ final class AuthService
 
         $stmt = $this->getPdo()->prepare(
             'INSERT INTO users(
-                username, email, password_hash, role, is_enabled, api_token, ui_theme, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
+                username, email, password_hash, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
              )
              VALUES(
-                :username, :email, :password_hash, :role, :is_enabled, :api_token, :ui_theme, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :username, :email, :password_hash, :role, :is_enabled, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
              )'
         );
 
@@ -734,18 +737,48 @@ final class AuthService
 
     public function getPreferredTheme(): string
     {
+        return $this->resolvePreferredTheme();
+    }
+
+    public function resolvePreferredTheme(?string $requestedTheme = null): string
+    {
         $defaultTheme = $this->getDefaultTheme();
-        if (!$this->isEnabled()) {
-            $cookieTheme = (string) ($_COOKIE[self::THEME_COOKIE_NAME] ?? '');
-            return $this->normalizeTheme($cookieTheme, $defaultTheme);
+        $requestedTheme = is_string($requestedTheme) ? strtolower(trim($requestedTheme)) : '';
+        $requestedTheme = in_array($requestedTheme, ['light', 'dark'], true) ? $requestedTheme : '';
+
+        $cookieState = $this->readThemeCookieState();
+        $user = $this->isEnabled() ? $this->getCurrentUser() : null;
+        $dbTheme = is_array($user) ? $this->normalizeTheme((string) ($user['ui_theme'] ?? ''), $defaultTheme) : $defaultTheme;
+        $dbTimestamp = is_array($user) ? $this->parseStoredTimestamp((string) ($user['ui_theme_updated_at'] ?? ($user['updated_at'] ?? ''))) : 0;
+
+        if ($requestedTheme !== '') {
+            $timestamp = time();
+            $this->persistThemeCookie($requestedTheme, $timestamp);
+            if (is_array($user)) {
+                $this->updateThemeForUserId((int) ($user['id'] ?? 0), $requestedTheme, $timestamp);
+            }
+
+            return $requestedTheme;
         }
 
-        $user = $this->getCurrentUser();
         if (!is_array($user)) {
-            return $defaultTheme;
+            return $cookieState['theme'] !== '' ? $cookieState['theme'] : $defaultTheme;
         }
 
-        return $this->normalizeTheme((string) ($user['ui_theme'] ?? ''), $defaultTheme);
+        $cookieTheme = $cookieState['theme'];
+        $cookieTimestamp = $cookieState['timestamp'];
+        if ($cookieTheme !== '' && $cookieTimestamp >= $dbTimestamp) {
+            if ($cookieTheme !== $dbTheme || $cookieTimestamp > $dbTimestamp) {
+                $this->updateThemeForUserId((int) ($user['id'] ?? 0), $cookieTheme, $cookieTimestamp);
+            }
+
+            return $cookieTheme;
+        }
+
+        $syncTimestamp = $dbTimestamp > 0 ? $dbTimestamp : time();
+        $this->persistThemeCookie($dbTheme, $syncTimestamp);
+
+        return $dbTheme;
     }
 
     public function getPreferredLocale(): string
@@ -800,21 +833,10 @@ final class AuthService
             throw new \RuntimeException(Lang::t('error.not_authenticated'));
         }
 
-        $normalizedTheme = $this->normalizeTheme($theme, $this->getDefaultTheme());
-        $stmt = $this->getPdo()->prepare(
-            'UPDATE users
-             SET ui_theme = :ui_theme, updated_at = CURRENT_TIMESTAMP
-             WHERE id = :id'
-        );
-        $stmt->execute([
-            ':id' => $userId,
-            ':ui_theme' => $normalizedTheme,
-        ]);
-
-        return $normalizedTheme;
+        return $this->updateThemeForUserId($userId, $theme, time());
     }
 
-    public function persistThemeCookie(string $theme): void
+    public function persistThemeCookie(string $theme, ?int $timestamp = null): void
     {
         $normalizedTheme = $this->normalizeTheme($theme, $this->getDefaultTheme());
         if (headers_sent()) {
@@ -824,8 +846,35 @@ final class AuthService
         $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
             || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
 
+        $timestamp = $timestamp ?? time();
+
         setcookie(self::THEME_COOKIE_NAME, $normalizedTheme, [
             'expires' => time() + self::THEME_COOKIE_TTL,
+            'path' => '/',
+            'secure' => $isHttps,
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
+        setcookie(self::THEME_COOKIE_TS_NAME, (string) $timestamp, [
+            'expires' => time() + self::THEME_COOKIE_TTL,
+            'path' => '/',
+            'secure' => $isHttps,
+            'httponly' => false,
+            'samesite' => 'Lax',
+        ]);
+    }
+
+    public function persistCatalogStateCookie(string $catalogUrl): void
+    {
+        $catalogUrl = trim($catalogUrl);
+        if ($catalogUrl === '' || headers_sent()) {
+            return;
+        }
+
+        $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) ($_SERVER['HTTPS'])) !== 'off')
+            || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
+        setcookie(self::CATALOG_STATE_COOKIE_NAME, $catalogUrl, [
+            'expires' => time() + self::CATALOG_STATE_COOKIE_TTL,
             'path' => '/',
             'secure' => $isHttps,
             'httponly' => false,
@@ -1015,6 +1064,7 @@ final class AuthService
                          is_enabled = 1,
                          is_default = 1,
                          ui_theme = COALESCE(NULLIF(ui_theme, ""), :default_theme),
+                         ui_theme_updated_at = COALESCE(ui_theme_updated_at, CURRENT_TIMESTAMP),
                          ui_locale = COALESCE(NULLIF(ui_locale, ""), :default_locale),
                          ui_sort_field = COALESCE(NULLIF(ui_sort_field, ""), :default_sort_field),
                          ui_sort_direction = COALESCE(NULLIF(ui_sort_direction, ""), :default_sort_direction),
@@ -1036,10 +1086,10 @@ final class AuthService
             } else {
                 $insertStmt = $pdo->prepare(
                     'INSERT INTO users(
-                        username, email, password_hash, role, is_enabled, api_token, ui_theme, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
+                        username, email, password_hash, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
                      )
                      VALUES(
-                        :username, :email, :password_hash, :role, 1, :api_token, :ui_theme, :ui_locale, :ui_sort_field, :ui_sort_direction, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                        :username, :email, :password_hash, :role, 1, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                      )'
                 );
                 $insertStmt->execute([
@@ -1731,6 +1781,61 @@ final class AuthService
         }
 
         return $fallback === 'dark' ? 'dark' : 'light';
+    }
+
+    /**
+     * @return array{theme:string,timestamp:int}
+     */
+    private function readThemeCookieState(): array
+    {
+        $defaultTheme = $this->getDefaultTheme();
+        $cookieTheme = (string) ($_COOKIE[self::THEME_COOKIE_NAME] ?? '');
+        $normalizedTheme = $cookieTheme !== '' ? $this->normalizeTheme($cookieTheme, $defaultTheme) : '';
+        $timestamp = max(0, (int) ($_COOKIE[self::THEME_COOKIE_TS_NAME] ?? 0));
+
+        return [
+            'theme' => $normalizedTheme,
+            'timestamp' => $timestamp,
+        ];
+    }
+
+    private function parseStoredTimestamp(string $value): int
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 0;
+        }
+
+        $timestamp = strtotime($value . (str_contains($value, 'T') ? '' : ' UTC'));
+        if ($timestamp === false) {
+            $timestamp = strtotime($value);
+        }
+
+        return $timestamp === false ? 0 : max(0, (int) $timestamp);
+    }
+
+    private function updateThemeForUserId(int $userId, string $theme, int $timestamp): string
+    {
+        if ($userId < 1) {
+            return $this->normalizeTheme($theme, $this->getDefaultTheme());
+        }
+
+        $normalizedTheme = $this->normalizeTheme($theme, $this->getDefaultTheme());
+        $storedTimestamp = gmdate('Y-m-d H:i:s', max(0, $timestamp));
+        $stmt = $this->getPdo()->prepare(
+            'UPDATE users
+             SET ui_theme = :ui_theme,
+                 ui_theme_updated_at = :ui_theme_updated_at,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            ':id' => $userId,
+            ':ui_theme' => $normalizedTheme,
+            ':ui_theme_updated_at' => $storedTimestamp,
+        ]);
+
+        return $normalizedTheme;
     }
 
     private function normalizeSortField(string $sortField, string $fallback): string

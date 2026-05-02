@@ -20,6 +20,9 @@
   const nextButton = app.querySelector("[data-reader-next]");
   const openTocButton = app.querySelector("[data-reader-open-toc]");
   const closeTocButton = app.querySelector("[data-reader-close-toc]");
+  const backLink = app.querySelector("[data-reader-back-link]");
+  const themeToggleButton = document.querySelector("[data-theme-toggle]");
+  const catalogStateCookieName = (themeToggleButton?.getAttribute("data-catalog-state-cookie-name") || "").trim();
 
   if (!(viewport instanceof HTMLElement) || !(contentNode instanceof HTMLElement) || !manifestUrl || !pageUrl || !Number.isInteger(bookId) || bookId <= 0) {
     return;
@@ -47,6 +50,57 @@
   let statusTimer = null;
 
   const normalizeTheme = () => (document.body.getAttribute("data-theme") === "dark" ? "dark" : "light");
+
+  const readCookieValue = (name) => {
+    if (!name) {
+      return "";
+    }
+
+    const prefix = `${encodeURIComponent(name)}=`;
+    const parts = document.cookie.split(/;\s*/);
+    for (const part of parts) {
+      if (part.startsWith(prefix)) {
+        try {
+          return decodeURIComponent(part.slice(prefix.length));
+        } catch (_error) {
+          return part.slice(prefix.length);
+        }
+      }
+    }
+
+    return "";
+  };
+
+  const buildBackLinkHref = () => {
+    const fallbackHref = backLink instanceof HTMLAnchorElement ? (backLink.getAttribute("href") || "index.php") : "index.php";
+    const cookieValue = readCookieValue(catalogStateCookieName);
+    const candidate = cookieValue.trim() !== "" ? cookieValue.trim() : fallbackHref;
+
+    try {
+      const url = new URL(candidate, window.location.href);
+      const normalizedPath = url.pathname.replace(/^.*\//, "");
+      if (normalizedPath !== "index.php") {
+        throw new Error("invalid back path");
+      }
+      url.searchParams.set("theme", state.currentTheme);
+      return `${url.pathname}${url.search}${url.hash}`;
+    } catch (_error) {
+      try {
+        const url = new URL(fallbackHref, window.location.href);
+        url.searchParams.set("theme", state.currentTheme);
+        return `${url.pathname}${url.search}${url.hash}`;
+      } catch (_innerError) {
+        return "index.php";
+      }
+    }
+  };
+
+  const syncBackLinkTheme = () => {
+    if (!(backLink instanceof HTMLAnchorElement)) {
+      return;
+    }
+    backLink.setAttribute("href", buildBackLinkHref());
+  };
 
   const setStatus = (message, isError = false) => {
     if (statusNode instanceof HTMLElement) {
@@ -265,6 +319,8 @@
     state.pdfPage = 1;
     await renderPdfPage(1);
   };
+
+  syncBackLinkTheme();
 
   const renderComicPage = (section) => {
     if (!section || !section.image_url) {
@@ -518,6 +574,7 @@
     }
 
     state.currentTheme = nextTheme;
+    syncBackLinkTheme();
     if (state.pdfDocument) {
       renderPdfPage(state.pdfPage);
       return;
