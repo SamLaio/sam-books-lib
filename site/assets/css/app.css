@@ -940,24 +940,31 @@ td.col-isbn {
 
 th.col-read,
 td.col-read {
-  width: 9%;
+  width: 5%;
+  min-width: 52px;
 }
 
 th.col-actions,
 td.col-actions {
-  width: 10%;
+  width: 140px;
+  min-width: 140px;
 }
 
 td.actions {
   white-space: nowrap;
   width: 1%;
+  text-align: left;
 }
 
 .action-buttons {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 4px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  align-content: flex-start;
+  width: 100%;
 }
 
 td.col-title,
@@ -978,32 +985,12 @@ td.col-read {
   text-align: center;
 }
 
-.download-btn {
-  display: inline-block;
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.send-btn {
-  display: inline-block;
-  padding: 8px 12px;
-  font-size: 13px;
-  background: #2563eb;
-}
-
-.send-btn:hover {
-  background: #1d4ed8;
-}
-
+.download-btn,
+.send-btn,
 .read-btn {
-  display: inline-block;
-  padding: 8px 12px;
-  font-size: 13px;
-  background: #2563eb;
-}
-
-.read-btn:hover {
-  background: #1d4ed8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .read-checkbox {
@@ -1201,40 +1188,41 @@ td.col-read {
 
 .book-dialog__actions {
   flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(84px, 1fr));
+  align-items: stretch;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  max-width: min(100%, 320px);
+  justify-content: end;
+  width: min(100%, 220px);
 }
 
 .book-dialog__actions .btn,
 .book-dialog__actions button {
-  min-width: 88px;
+  width: 100%;
+  min-width: 84px;
   min-height: 42px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 14px;
+  padding: 10px 16px;
   box-sizing: border-box;
+}
+
+.book-dialog__actions .btn.action-text-btn,
+.book-dialog__actions .btn.action-text-btn:visited,
+.book-dialog__actions .btn.action-text-btn:hover,
+.book-dialog__actions .btn.action-text-btn:focus-visible,
+.book-dialog__actions .btn.action-text-btn:active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 0 !important;
 }
 
 .book-dialog__download {
   white-space: nowrap;
 }
 
-.book-dialog__read {
-  white-space: nowrap;
-  background: #2563eb;
-}
-
-.book-dialog__read:hover {
-  background: #1d4ed8;
-}
-
 .book-dialog__close {
-  flex: 0 0 auto;
   white-space: nowrap;
   background: #dc2626;
 }
@@ -1723,6 +1711,10 @@ body[data-theme="dark"] .admin-job-mobile-card {
 }
 
 @media (max-width: 900px) {
+  .action-buttons {
+    flex-wrap: wrap;
+  }
+
   .panel,
   table,
   tr,
@@ -1971,6 +1963,20 @@ body[data-theme="dark"] .admin-job-mobile-card {
     order: 8;
   }
 
+  td.col-actions::before {
+    display: block;
+    margin-bottom: 8px;
+  }
+
+  td.col-actions .action-buttons {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  td.col-actions .action-buttons .btn {
+    width: 100%;
+  }
+
   .summary,
   .pager {
     flex-direction: column;
@@ -2092,4 +2098,78 @@ body[data-theme="dark"] .admin-job-mobile-card {
   .scroll-fab {
     display: none;
   }
+}
+
+.read-btn,
+.book-dialog__read {
+  background: var(--accent);
+  color: #ffffff;
+  border: 0;
+}
+
+.read-btn:hover,
+.book-dialog__read:hover {
+  background: var(--accent-2);
+  color: #ffffff;
+}
+
+.icon-action-btn {
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.action-buttons .btn.icon-action-btn,
+.action-buttons .btn.icon-action-btn:visited,
+.book-dialog__actions .btn.icon-action-btn,
+.book-dialog__actions .btn.icon-action-btn:visited {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+.action-buttons .btn.icon-action-btn:hover,
+.action-buttons .btn.icon-action-btn:focus-visible,
+.book-dialog__actions .btn.icon-action-btn:hover,
+.book-dialog__actions .btn.icon-action-btn:focus-visible {
+  background: var(--accent-2) !important;
+  color: #ffffff !important;
+}
+
+.action-buttons .btn.action-text-btn,
+.action-buttons .btn.action-text-btn:visited {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  background: var(--accent) !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+.action-buttons .btn.action-text-btn:hover,
+.action-buttons .btn.action-text-btn:focus-visible {
+  background: var(--accent-2) !important;
+  color: #ffffff !important;
+}
+
+.action-buttons .btn.action-text-btn:active {
+  background: var(--accent) !important;
+  color: #ffffff !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

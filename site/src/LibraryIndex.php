@@ -10,6 +10,8 @@ class LibraryIndex
     private string $sqlitePath;
     private \PDO $pdo;
     private bool $ftsSearchAvailable = false;
+    /** @var string[] */
+    private array $searchableFormatTerms = ['pdf', 'epub', 'cbz'];
 
     public function __construct(string $sqlitePath, ?string $appRoot = null)
     {
@@ -91,7 +93,7 @@ class LibraryIndex
              FROM books'
         );
 
-        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $path = isset($row['path']) ? $this->normalizePath((string) $row['path']) : null;
             if ($path === null || $path === '') {
                 continue;
@@ -132,6 +134,46 @@ class LibraryIndex
         return $snapshots;
     }
 
+    public function exportScanSnapshotsByPath(): array
+    {
+        $snapshots = [];
+        $stmt = $this->pdo->query(
+            'SELECT path, title, author, cover_path, formats_json, source_mtime
+             FROM books'
+        );
+
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
+            $path = isset($row['path']) ? $this->normalizePath((string) $row['path']) : null;
+            if ($path === null || $path === '') {
+                continue;
+            }
+
+            $formats = [];
+            $formatsJson = (string) ($row['formats_json'] ?? '');
+            if ($formatsJson !== '') {
+                $decodedFormats = json_decode($formatsJson, true);
+                if (is_array($decodedFormats)) {
+                    $formats = $this->normalizeFormats($decodedFormats);
+                }
+            }
+
+            $sourceMtime = isset($row['source_mtime']) && is_numeric($row['source_mtime'])
+                ? (int) $row['source_mtime']
+                : null;
+
+            $snapshots[$path] = [
+                'title' => (string) ($row['title'] ?? ''),
+                'author' => (string) ($row['author'] ?? ''),
+                'cover_path' => $this->normalizePath(isset($row['cover_path']) ? (string) $row['cover_path'] : null),
+                'formats' => $formats,
+                'metadata' => [],
+                'source_mtime' => $sourceMtime,
+            ];
+        }
+
+        return $snapshots;
+    }
+
     public function exportBookPathSnapshots(): array
     {
         $snapshots = [];
@@ -140,7 +182,7 @@ class LibraryIndex
              FROM book_paths'
         );
 
-        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+        while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             $path = isset($row['path']) ? $this->normalizePath((string) $row['path']) : null;
             if ($path === null || $path === '') {
                 continue;
@@ -163,7 +205,7 @@ class LibraryIndex
             'SELECT path, title, author, source_mtime
              FROM books'
         );
-        foreach ($fallbackStmt->fetchAll(\PDO::FETCH_ASSOC) ?: [] as $row) {
+        while ($row = $fallbackStmt->fetch(\PDO::FETCH_ASSOC)) {
             $path = isset($row['path']) ? $this->normalizePath((string) $row['path']) : null;
             if ($path === null || $path === '') {
                 continue;
@@ -266,30 +308,6 @@ class LibraryIndex
         }
 
         $searchFilter = $this->buildSearchFilter($query);
-        if (($searchFilter['mode'] ?? '') === 'fts') {
-            $whereSql = 'path IN (
-                    SELECT path
-                    FROM books_fts
-                    WHERE books_fts MATCH :fts_query
-                 )';
-            if ($visibilityFilter !== null) {
-                $whereSql .= ' AND ' . $visibilityFilter['sql'];
-            }
-            $stmt = $this->pdo->prepare(
-                'SELECT ' . $this->getBookListColumns() . '
-                 FROM books
-                 WHERE ' . $whereSql . '
-                 ORDER BY title COLLATE NOCASE ASC'
-            );
-            $stmt->bindValue(':fts_query', (string) ($searchFilter['query'] ?? ''), \PDO::PARAM_STR);
-            foreach (($visibilityFilter['params'] ?? []) as $name => $value) {
-                $stmt->bindValue($name, $value, \PDO::PARAM_STR);
-            }
-            $stmt->execute();
-
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-        }
-
         $whereSql = $searchFilter['sql'];
         if ($visibilityFilter !== null) {
             $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
@@ -345,33 +363,6 @@ class LibraryIndex
         }
 
         $searchFilter = $this->buildSearchFilter($query);
-        if (($searchFilter['mode'] ?? '') === 'fts') {
-            $whereSql = 'path IN (
-                    SELECT path
-                    FROM books_fts
-                    WHERE books_fts MATCH :fts_query
-                 )';
-            if ($visibilityFilter !== null) {
-                $whereSql .= ' AND ' . $visibilityFilter['sql'];
-            }
-            $stmt = $this->pdo->prepare(
-                'SELECT ' . $this->getBookListColumns() . '
-                 FROM books
-                 WHERE ' . $whereSql . '
-                 ORDER BY ' . $orderByClause . '
-                 LIMIT :limit OFFSET :offset'
-            );
-            $stmt->bindValue(':fts_query', (string) ($searchFilter['query'] ?? ''), \PDO::PARAM_STR);
-            foreach (($visibilityFilter['params'] ?? []) as $name => $value) {
-                $stmt->bindValue($name, $value, \PDO::PARAM_STR);
-            }
-            $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
-            $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
-            $stmt->execute();
-
-            return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
-        }
-
         $whereSql = $searchFilter['sql'];
         if ($visibilityFilter !== null) {
             $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
@@ -413,30 +404,6 @@ class LibraryIndex
         }
 
         $searchFilter = $this->buildSearchFilter($query);
-        if (($searchFilter['mode'] ?? '') === 'fts') {
-            $sql = 'SELECT COUNT(*)
-                 FROM books
-                 WHERE path IN (
-                    SELECT path
-                    FROM books_fts
-                    WHERE books_fts MATCH :fts_query
-                 )';
-            if ($visibilityFilter !== null) {
-                $sql .= '
-                 AND ' . $visibilityFilter['sql'];
-            }
-            $stmt = $this->pdo->prepare(
-                $sql
-            );
-            $stmt->bindValue(':fts_query', (string) ($searchFilter['query'] ?? ''), \PDO::PARAM_STR);
-            foreach (($visibilityFilter['params'] ?? []) as $name => $value) {
-                $stmt->bindValue($name, $value, \PDO::PARAM_STR);
-            }
-            $stmt->execute();
-
-            return (int) $stmt->fetchColumn();
-        }
-
         $whereSql = $searchFilter['sql'];
         if ($visibilityFilter !== null) {
             $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
@@ -1106,13 +1073,6 @@ class LibraryIndex
             ];
         }
 
-        if ($this->ftsSearchAvailable) {
-            $ftsFilter = $this->buildFtsSearchFilter($query);
-            if ($ftsFilter !== null) {
-                return $ftsFilter;
-            }
-        }
-
         $tokens = $this->tokenizeSearchExpression($query);
         $cursor = 0;
         $tree = $this->parseSearchExpression($tokens, $cursor);
@@ -1135,37 +1095,14 @@ class LibraryIndex
     private function buildFallbackSearchFilter(string $query): array
     {
         $placeholder = ':search_0';
+        $normalizedQuery = $this->normalizeSearchTerm($query);
 
         return [
             'mode' => 'sql',
             'sql' => $this->buildFieldMatchClause($placeholder),
             'params' => [
-                $placeholder => '%' . $query . '%',
+                $placeholder => '%' . $normalizedQuery . '%',
             ],
-        ];
-    }
-
-    private function buildFtsSearchFilter(string $query): ?array
-    {
-        $tokens = $this->tokenizeSearchExpression($query);
-        $cursor = 0;
-        $tree = $this->parseSearchExpression($tokens, $cursor);
-
-        if ($tree === null || $cursor !== count($tokens)) {
-            return [
-                'mode' => 'fts',
-                'query' => $this->quoteFtsTerm($query),
-            ];
-        }
-
-        $ftsQuery = $this->compileFtsSearchExpression($tree, true);
-        if ($ftsQuery === null || trim($ftsQuery) === '') {
-            return null;
-        }
-
-        return [
-            'mode' => 'fts',
-            'query' => $ftsQuery,
         ];
     }
 
@@ -1208,10 +1145,7 @@ class LibraryIndex
     private function buildFieldMatchClause(string $placeholder): string
     {
         return '(title LIKE ' . $placeholder . ' COLLATE NOCASE'
-            . ' OR author LIKE ' . $placeholder . ' COLLATE NOCASE'
-            . ' OR tag LIKE ' . $placeholder . ' COLLATE NOCASE'
-            . ' OR series LIKE ' . $placeholder . ' COLLATE NOCASE'
-            . ' OR isbn LIKE ' . $placeholder . ' COLLATE NOCASE)';
+            . ' OR author LIKE ' . $placeholder . ' COLLATE NOCASE)';
     }
 
     private function buildVisibilityFilter(array $hiddenAuthors, array $hiddenTags): ?array
@@ -1437,9 +1371,16 @@ class LibraryIndex
 
         if ($nodeType === 'TERM') {
             $placeholder = ':search_' . $termIndex++;
-            $params[$placeholder] = '%' . (string) ($node['value'] ?? '') . '%';
+            $normalizedTerm = $this->normalizeSearchTerm((string) ($node['value'] ?? ''));
+            $params[$placeholder] = '%' . $normalizedTerm . '%';
 
-            return $this->buildFieldMatchClause($placeholder);
+            $sql = $this->buildFieldMatchClause($placeholder);
+            $formatClause = $this->buildFormatMatchClause($normalizedTerm, $params, $termIndex);
+            if ($formatClause !== null) {
+                return '(' . $sql . ' OR ' . $formatClause . ')';
+            }
+
+            return $sql;
         }
 
         if ($nodeType === 'NOT') {
@@ -1461,53 +1402,26 @@ class LibraryIndex
         return '(' . $left . ' AND ' . $right . ')';
     }
 
-    private function compileFtsSearchExpression(array $node, bool $isRoot = false): ?string
+    private function normalizeSearchTerm(string $term): string
     {
-        $nodeType = $node['type'] ?? '';
-
-        if ($nodeType === 'TERM') {
-            return $this->quoteFtsTerm((string) ($node['value'] ?? ''));
+        $normalized = trim(mb_strtolower($term, 'UTF-8'));
+        if ($normalized === 'pdb') {
+            return 'pdf';
         }
 
-        if ($nodeType === 'NOT') {
-            // SQLite FTS does not support a standalone leading NOT query reliably.
-            if ($isRoot) {
-                return null;
-            }
+        return $normalized;
+    }
 
-            $operand = $this->compileFtsSearchExpression((array) ($node['value'] ?? []), false);
-            if ($operand === null || $operand === '') {
-                return null;
-            }
-
-            return 'NOT ' . $operand;
-        }
-
-        $left = $this->compileFtsSearchExpression((array) ($node['left'] ?? []), false);
-        $right = $this->compileFtsSearchExpression((array) ($node['right'] ?? []), false);
-        if ($left === null || $left === '' || $right === null || $right === '') {
+    private function buildFormatMatchClause(string $normalizedTerm, array &$params, int &$termIndex): ?string
+    {
+        if (!in_array($normalizedTerm, $this->searchableFormatTerms, true)) {
             return null;
         }
 
-        if ($nodeType === 'AND_NOT') {
-            return '(' . $left . ' NOT ' . $right . ')';
-        }
+        $formatPlaceholder = ':search_format_' . $termIndex++;
+        $params[$formatPlaceholder] = '"' . $normalizedTerm . '":';
 
-        if ($nodeType === 'OR') {
-            return '(' . $left . ' OR ' . $right . ')';
-        }
-
-        return '(' . $left . ' AND ' . $right . ')';
-    }
-
-    private function quoteFtsTerm(string $value): string
-    {
-        $normalized = trim(preg_replace('/\s+/u', ' ', $value) ?? '');
-        if ($normalized === '') {
-            return '""';
-        }
-
-        return '"' . str_replace('"', '""', $normalized) . '"';
+        return '(INSTR(LOWER(COALESCE(formats_json, \'\')), ' . $formatPlaceholder . ') > 0)';
     }
 
     private function setMeta(string $key, string $value): void

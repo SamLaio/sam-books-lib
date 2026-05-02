@@ -284,6 +284,7 @@
   const statusNode = dialog.querySelector("[data-book-detail-status]");
   const coverNode = dialog.querySelector("[data-book-detail-cover]");
   const coverImageNode = dialog.querySelector("[data-book-detail-cover-image]");
+  const readLink = dialog.querySelector("[data-book-detail-read]");
   const downloadLink = dialog.querySelector("[data-book-detail-download]");
   const sendLink = dialog.querySelector("[data-book-detail-send]");
   const closeButton = dialog.querySelector("[data-book-dialog-close]");
@@ -725,6 +726,27 @@
     downloadLink.setAttribute("href", `download.php?id=${bookId}`);
   };
 
+  const setReadLink = (book) => {
+    if (!readLink) {
+      return;
+    }
+
+    const directUrl = typeof book?.read_url === "string" ? book.read_url.trim() : "";
+    if (directUrl !== "") {
+      const backUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+      const resolvedUrl = new URL(directUrl, window.location.href);
+      if (!resolvedUrl.searchParams.has("back")) {
+        resolvedUrl.searchParams.set("back", backUrl);
+      }
+      readLink.hidden = false;
+      readLink.setAttribute("href", resolvedUrl.toString());
+      return;
+    }
+
+    readLink.hidden = true;
+    readLink.setAttribute("href", "#");
+  };
+
   const setSendLink = (book) => {
     if (!sendLink || !canSendBookByEmail) {
       if (sendLink) {
@@ -754,6 +776,7 @@
     setMetadataValue(metadataNodes.publisher, book.publisher || "");
     setMetadataValue(metadataNodes.language, book.language || "");
     setCover(book);
+    setReadLink(book);
     setDownloadLink(book);
     setSendLink(book);
     descriptionNode.textContent = book.description && book.description.trim() !== ""
@@ -772,6 +795,7 @@
     setMetadataValue(metadataNodes.publisher, "");
     setMetadataValue(metadataNodes.language, "");
     setCover({});
+    setReadLink({});
     setDownloadLink({});
     setSendLink({});
     descriptionNode.textContent = "載入中...";

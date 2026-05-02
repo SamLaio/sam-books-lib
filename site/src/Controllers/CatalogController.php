@@ -226,7 +226,13 @@ final class CatalogController
             $viewData['notice'] = $notice;
             $viewData['scanRunning'] = $scanRunning;
             $viewData['lastRebuildAt'] = $lastRebuildAt;
-            $viewData['rows'] = $this->buildRows($rows, $urlGenerator, (bool) $viewData['canSendBookByEmail']);
+            $currentCatalogUrl = $this->resolveCurrentCatalogUrl($server);
+            $viewData['rows'] = $this->buildRows(
+                $rows,
+                $urlGenerator,
+                (bool) $viewData['canSendBookByEmail'],
+                $currentCatalogUrl
+            );
             $viewData['totalRows'] = $totalRows;
             $viewData['totalPages'] = $totalPages;
             $viewData['currentPage'] = $currentPage;
@@ -240,7 +246,12 @@ final class CatalogController
         echo $this->view->renderPage('catalog/index', $viewData);
     }
 
-    private function buildRows(array $rows, CatalogUrlGenerator $urlGenerator, bool $canSendBookByEmail): array
+    private function buildRows(
+        array $rows,
+        CatalogUrlGenerator $urlGenerator,
+        bool $canSendBookByEmail,
+        string $currentCatalogUrl
+    ): array
     {
         $renderedRows = [];
 
@@ -253,6 +264,9 @@ final class CatalogController
             $baseRow = $row + [
                 'download_url' => isset($row['id']) ? 'download.php?id=' . (int) $row['id'] : null,
                 'send_url' => $canSendBookByEmail && isset($row['id']) ? 'send.php?id=' . (int) $row['id'] : null,
+                'read_url' => (isset($row['id']) && $this->hasReadableBook($row))
+                    ? 'reader.php?id=' . (int) $row['id'] . '&back=' . rawurlencode($currentCatalogUrl)
+                    : null,
                 'details_url' => isset($row['id']) ? 'book.php?id=' . (int) $row['id'] : null,
                 'cover_preview_url' => $coverPreviewUrl,
                 'author_links' => $this->buildAuthorLinks((string) ($row['author'] ?? ''), $urlGenerator),
@@ -270,6 +284,55 @@ final class CatalogController
         }
 
         return $renderedRows;
+    }
+
+    private function resolveCurrentCatalogUrl(array $server): string
+    {
+        $requestUri = (string) ($server['REQUEST_URI'] ?? '');
+        if ($requestUri === '') {
+            return 'index.php';
+        }
+
+        $parts = parse_url($requestUri);
+        $path = trim((string) ($parts['path'] ?? ''), '/');
+        $query = (string) ($parts['query'] ?? '');
+
+        if ($path === '' || $path === 'index.php') {
+            return $query !== '' ? 'index.php?' . $query : 'index.php';
+        }
+
+        return 'index.php';
+    }
+
+    private function hasReadableBook(array $row): bool
+    {
+        $readableFormats = ['epub', 'pdf', 'cbz'];
+        $path = trim((string) ($row['path'] ?? ''));
+        if (in_array(strtolower((string) pathinfo($path, PATHINFO_EXTENSION)), $readableFormats, true)) {
+            return true;
+        }
+
+        $formatsJson = $row['formats_json'] ?? null;
+        if (!is_string($formatsJson) || trim($formatsJson) === '') {
+            return false;
+        }
+
+        $formats = json_decode($formatsJson, true);
+        if (!is_array($formats)) {
+            return false;
+        }
+
+        foreach ($formats as $format => $candidatePath) {
+            if (in_array(strtolower(trim((string) $format)), $readableFormats, true)) {
+                return true;
+            }
+
+            if (is_string($candidatePath) && in_array(strtolower((string) pathinfo($candidatePath, PATHINFO_EXTENSION)), $readableFormats, true)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveVersionLabelFromPath(string $path): string

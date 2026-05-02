@@ -11,15 +11,18 @@ final class BookDetailsService
 {
     private ScanService $scanService;
     private OpdsAssetService $opdsAssetService;
+    private ReaderAccessService $readerAccessService;
 
     public function __construct(
         string $appRoot,
         ?ScanService $scanService = null,
-        ?OpdsAssetService $opdsAssetService = null
+        ?OpdsAssetService $opdsAssetService = null,
+        ?ReaderAccessService $readerAccessService = null
     )
     {
         $this->scanService = $scanService ?? new ScanService($appRoot);
         $this->opdsAssetService = $opdsAssetService ?? new OpdsAssetService($appRoot, $this->scanService);
+        $this->readerAccessService = $readerAccessService ?? new ReaderAccessService($appRoot);
     }
 
     public function getDetails(int $bookId): array
@@ -58,6 +61,9 @@ final class BookDetailsService
             'language' => $language,
             'description' => $description ?? '',
             'cover_url' => $cover !== null ? 'opds.php?feed=cover&id=' . (int) ($book['id'] ?? 0) : null,
+            'read_url' => $this->readerAccessService->hasReadableBook($book)
+                ? 'reader.php?id=' . (int) ($book['id'] ?? 0)
+                : null,
             'send_url' => 'send.php?id=' . (int) ($book['id'] ?? 0),
         ];
     }

@@ -53,6 +53,13 @@ if (isset($currentTheme) && is_string($currentTheme)) {
   <link rel="icon" href="<?= $escape($assetUrl('favicon.ico')) ?>" sizes="any">
   <link rel="shortcut icon" href="<?= $escape($assetUrl('favicon.ico')) ?>">
   <link rel="stylesheet" href="<?= $escape($assetUrl('assets/css/app.css')) ?>">
+  <?php if (isset($pageStyles) && is_array($pageStyles)): ?>
+    <?php foreach ($pageStyles as $stylePath): ?>
+      <?php if (is_string($stylePath) && trim($stylePath) !== ''): ?>
+        <link rel="stylesheet" href="<?= $escape($assetUrl($stylePath)) ?>">
+      <?php endif; ?>
+    <?php endforeach; ?>
+  <?php endif; ?>
   <script src="<?= $escape($assetUrl('assets/js/catalog.js')) ?>" defer></script>
   <?php if (isset($pageScripts) && is_array($pageScripts)): ?>
     <?php foreach ($pageScripts as $scriptPath): ?>

@@ -7,6 +7,7 @@ class CalibreLibrary
     private string $rootPath;
     private string $thumbDir;
     private array $previousBookCache = [];
+    private array $previousDirectoryCache = [];
     private array $databaseKnownBookPaths = [];
 
     public function __construct(string $rootPath, ?string $thumbDir = null)
@@ -87,15 +88,24 @@ class CalibreLibrary
     public function setPreviousBookCache(array $snapshotsByPath): void
     {
         $cache = [];
+        $directoryCache = [];
         foreach ($snapshotsByPath as $path => $snapshot) {
             if (!is_string($path) || trim($path) === '' || !is_array($snapshot)) {
                 continue;
             }
 
-            $cache[$this->normalizePath($path)] = $snapshot;
+            $normalizedPath = $this->normalizePath($path);
+            $cache[$normalizedPath] = $snapshot;
+            $directory = $this->normalizePath(dirname($normalizedPath));
+            if ($directory === '') {
+                continue;
+            }
+
+            $directoryCache[$directory][$normalizedPath] = true;
         }
 
         $this->previousBookCache = $cache;
+        $this->previousDirectoryCache = $directoryCache;
     }
 
     private function resolvePreferredSource(string $dbPath): string
@@ -261,10 +271,26 @@ class CalibreLibrary
     {
         $ebookFormats = $this->getEbookFormats();
 
-        foreach ($this->iterateFilesystemGroups($ebookFormats, $rootOnly) as $group) {
-            $book = $this->buildBookFromFilesystemGroup($group);
-            if ($book !== null) {
-                yield $book;
+        foreach ($this->iterateFilesystemDirectories($rootOnly) as $directory) {
+            $groups = $this->collectBookGroupsInDirectory($directory, $ebookFormats);
+            if ($groups === []) {
+                continue;
+            }
+
+            $directoryMtime = $this->resolveSourceMtime($directory);
+            $cachedBooks = $this->collectCachedFilesystemBooksForDirectory($directory, $groups, $directoryMtime);
+            if ($cachedBooks !== null) {
+                foreach ($cachedBooks as $cachedBook) {
+                    yield $cachedBook;
+                }
+                continue;
+            }
+
+            foreach ($groups as $group) {
+                $book = $this->buildBookFromFilesystemGroup($group, $directoryMtime);
+                if ($book !== null) {
+                    yield $book;
+                }
             }
         }
     }
@@ -273,21 +299,21 @@ class CalibreLibrary
     {
         $ebookFormats = $this->getEbookFormats();
         $count = 0;
-        foreach ($this->iterateFilesystemGroups($ebookFormats, false) as $_group) {
-            $count++;
+        foreach ($this->iterateFilesystemDirectories(false) as $directory) {
+            foreach ($this->collectBookGroupsInDirectory($directory, $ebookFormats) as $_group) {
+                $count++;
+            }
         }
 
         return $count;
     }
 
     /**
-     * @return \Generator<int, array{dir:string, stem:string, formats:array}>
+     * @return \Generator<int, string>
      */
-    private function iterateFilesystemGroups(array $ebookFormats, bool $rootOnly = false): \Generator
+    private function iterateFilesystemDirectories(bool $rootOnly = false): \Generator
     {
-        foreach ($this->collectBookGroupsInDirectory($this->rootPath, $ebookFormats) as $group) {
-            yield $group;
-        }
+        yield $this->rootPath;
 
         if ($rootOnly) {
             return;
@@ -306,29 +332,28 @@ class CalibreLibrary
                 continue;
             }
 
-            $directory = $fileInfo->getPathname();
-            foreach ($this->collectBookGroupsInDirectory($directory, $ebookFormats) as $group) {
-                yield $group;
-            }
+            yield $fileInfo->getPathname();
         }
     }
 
     private function hasFilesystemBookOutsideDatabase(): bool
     {
         $ebookFormats = $this->getEbookFormats();
-        foreach ($this->iterateFilesystemGroups($ebookFormats, false) as $group) {
-            $formats = $group['formats'] ?? [];
-            if (!is_array($formats) || $formats === []) {
-                continue;
-            }
+        foreach ($this->iterateFilesystemDirectories(false) as $directory) {
+            foreach ($this->collectBookGroupsInDirectory($directory, $ebookFormats) as $group) {
+                $formats = $group['formats'] ?? [];
+                if (!is_array($formats) || $formats === []) {
+                    continue;
+                }
 
-            $primaryPath = $this->pickPrimaryFormatPath($formats);
-            if ($primaryPath === '') {
-                continue;
-            }
+                $primaryPath = $this->pickPrimaryFormatPath($formats);
+                if ($primaryPath === '') {
+                    continue;
+                }
 
-            if (!$this->isBookPathFromDatabase($primaryPath)) {
-                return true;
+                if (!$this->isBookPathFromDatabase($primaryPath)) {
+                    return true;
+                }
             }
         }
 
@@ -357,7 +382,7 @@ class CalibreLibrary
         return false;
     }
 
-    private function buildBookFromFilesystemGroup(array $group): ?Book
+    private function buildBookFromFilesystemGroup(array $group, ?int $sourceMtime = null): ?Book
     {
         $formats = $group['formats'] ?? [];
         if (!is_array($formats) || $formats === []) {
@@ -378,7 +403,7 @@ class CalibreLibrary
             return null;
         }
 
-        $sourceMtime = $this->resolveSourceMtime($bookDir);
+        $sourceMtime ??= $this->resolveSourceMtime($bookDir);
         $cachedBook = $this->buildBookFromCache($primaryPath, $sourceMtime);
         if ($cachedBook !== null) {
             return $cachedBook;
@@ -408,6 +433,55 @@ class CalibreLibrary
             $metadata,
             $coverPath
         );
+    }
+
+    /**
+     * @param array<int, array{dir:string, stem:string, formats:array}> $groups
+     * @return array<int, Book>|null
+     */
+    private function collectCachedFilesystemBooksForDirectory(string $directory, array $groups, ?int $directoryMtime): ?array
+    {
+        if ($directoryMtime === null || $groups === []) {
+            return null;
+        }
+
+        $normalizedDirectory = $this->normalizePath($directory);
+        $knownPaths = $this->previousDirectoryCache[$normalizedDirectory] ?? null;
+        if (!is_array($knownPaths) || $knownPaths === []) {
+            return null;
+        }
+
+        $cachedBooks = [];
+        $relevantGroupCount = 0;
+        foreach ($groups as $group) {
+            $formats = $group['formats'] ?? [];
+            if (!is_array($formats) || $formats === []) {
+                continue;
+            }
+
+            $primaryPath = $this->pickPrimaryFormatPath($formats);
+            if ($primaryPath === '' || $this->isBookPathFromDatabase($primaryPath)) {
+                continue;
+            }
+
+            $relevantGroupCount++;
+            if (!isset($knownPaths[$this->normalizePath($primaryPath)])) {
+                return null;
+            }
+
+            $cachedBook = $this->buildBookFromCache($primaryPath, $directoryMtime);
+            if ($cachedBook === null) {
+                return null;
+            }
+
+            $cachedBooks[] = $cachedBook;
+        }
+
+        if ($relevantGroupCount === 0) {
+            return [];
+        }
+
+        return count($cachedBooks) === $relevantGroupCount ? $cachedBooks : null;
     }
 
     private function rememberDatabaseBookPath(string $bookPath): void
@@ -554,7 +628,7 @@ class CalibreLibrary
 
     private function getEbookFormats(): array
     {
-        return ['epub', 'mobi', 'azw3', 'pdf', 'azw', 'txt', 'html', 'rtf'];
+        return ['epub', 'mobi', 'azw3', 'pdf', 'cbz', 'azw', 'txt', 'html', 'rtf'];
     }
 
     private function ensureCover(string $bookPath, bool $hasCover, array $formats): ?string
@@ -584,6 +658,10 @@ class CalibreLibrary
         // Prefer epub for cover extraction
         if (isset($formats['epub'])) {
             return $this->extractCoverFromEpub($formats['epub']);
+        }
+
+        if (isset($formats['cbz'])) {
+            return $this->extractCoverFromCbz($formats['cbz']);
         }
 
         // Could add support for other formats like mobi, but epub is easiest
@@ -685,6 +763,64 @@ class CalibreLibrary
         }
 
         $thumbPath = $this->buildThumbPath($epubPath, $extension);
+        if (file_put_contents($thumbPath, $coverData) === false) {
+            return null;
+        }
+
+        return $thumbPath;
+    }
+
+    private function extractCoverFromCbz(string $cbzPath): ?string
+    {
+        if (!extension_loaded('zip')) {
+            return null;
+        }
+
+        if (!is_dir($this->thumbDir)) {
+            mkdir($this->thumbDir, 0755, true);
+        }
+
+        $zip = new \ZipArchive();
+        if ($zip->open($cbzPath) !== true) {
+            return null;
+        }
+
+        $firstImageName = null;
+        $firstImageIndex = null;
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $entryName = (string) $zip->getNameIndex($i);
+            if ($entryName === '' || str_ends_with($entryName, '/')) {
+                continue;
+            }
+
+            $extension = strtolower((string) pathinfo($entryName, PATHINFO_EXTENSION));
+            if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+                continue;
+            }
+
+            $firstImageName = $entryName;
+            $firstImageIndex = $i;
+            break;
+        }
+
+        if ($firstImageName === null || $firstImageIndex === null) {
+            $zip->close();
+            return null;
+        }
+
+        $coverData = $zip->getFromIndex($firstImageIndex);
+        $zip->close();
+        if ($coverData === false || $coverData === '') {
+            return null;
+        }
+
+        $extension = strtolower((string) pathinfo($firstImageName, PATHINFO_EXTENSION));
+        if ($extension === '') {
+            $extension = 'jpg';
+        }
+
+        $thumbPath = $this->buildThumbPath($cbzPath, $extension);
         if (file_put_contents($thumbPath, $coverData) === false) {
             return null;
         }
@@ -795,7 +931,7 @@ class CalibreLibrary
 
     private function findFormats(string $titlePath): array
     {
-        $ebookFormats = ['epub', 'mobi', 'azw3', 'pdf', 'azw', 'txt', 'html', 'rtf'];
+        $ebookFormats = ['epub', 'mobi', 'azw3', 'pdf', 'cbz', 'azw', 'txt', 'html', 'rtf'];
         $files = scandir($titlePath, SCANDIR_SORT_ASCENDING);
         if ($files === false) {
             return [];
@@ -1021,7 +1157,7 @@ class CalibreLibrary
 
     private function pickPrimaryFormatPath(array $formats): string
     {
-        $priority = ['epub', 'azw3', 'mobi', 'pdf', 'azw', 'txt', 'html', 'rtf'];
+        $priority = ['epub', 'pdf', 'cbz', 'azw3', 'mobi', 'azw', 'txt', 'html', 'rtf'];
         foreach ($priority as $format) {
             if (isset($formats[$format]) && is_string($formats[$format])) {
                 return $formats[$format];

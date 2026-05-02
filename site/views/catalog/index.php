@@ -214,15 +214,14 @@ $escape = static function ($value): string {
                 <td class="col-isbn" data-label="<?= $escape($t('catalog.isbn')) ?>"><?= $escape($row['isbn'] ?? '') ?></td>
                 <td class="actions col-actions" data-label="<?= $escape($t('common.actions')) ?>">
                   <div class="action-buttons">
+                    <?php if (($row['read_url'] ?? null) !== null): ?>
+                      <a class="btn read-btn action-text-btn" href="<?= $escape($row['read_url']) ?>"><?= $escape($t('common.read')) ?></a>
+                    <?php endif; ?>
                     <?php if (($row['download_url'] ?? null) !== null): ?>
-                      <a class="btn download-btn" href="<?= $escape($row['download_url']) ?>">
-                        <?= $escape($t('common.download')) ?>
-                      </a>
+                      <a class="btn download-btn action-text-btn" href="<?= $escape($row['download_url']) ?>"><?= $escape($t('common.download')) ?></a>
                     <?php endif; ?>
                     <?php if (($row['send_url'] ?? null) !== null): ?>
-                      <a class="btn send-btn" href="<?= $escape($row['send_url']) ?>">
-                        <?= $escape($t('common.send')) ?>
-                      </a>
+                      <a class="btn send-btn action-text-btn" href="<?= $escape($row['send_url']) ?>"><?= $escape($t('common.send')) ?></a>
                     <?php endif; ?>
                   </div>
                 </td>
@@ -294,9 +293,16 @@ $escape = static function ($value): string {
             <h2 class="book-dialog__title" data-book-detail-title>書籍簡介</h2>
           </div>
           <div class="book-dialog__actions">
-            <a class="btn book-dialog__download" data-book-detail-download href="#" hidden><?= $escape($t('common.download')) ?></a>
-            <a class="btn send-btn book-dialog__send" data-book-detail-send href="#" hidden><?= $escape($t('common.send')) ?></a>
+            <a class="btn secondary book-dialog__read action-text-btn" data-book-detail-read href="#" hidden title="<?= $escape($t('common.read')) ?>" aria-label="<?= $escape($t('common.read')) ?>">
+              <?= $escape($t('common.read')) ?>
+            </a>
             <button type="button" class="book-dialog__close" data-book-dialog-close aria-label="<?= $escape($t('common.close')) ?>"><?= $escape($t('common.close')) ?></button>
+            <a class="btn book-dialog__download action-text-btn" data-book-detail-download href="#" hidden title="<?= $escape($t('common.download')) ?>" aria-label="<?= $escape($t('common.download')) ?>">
+              <?= $escape($t('common.download')) ?>
+            </a>
+            <a class="btn send-btn book-dialog__send action-text-btn" data-book-detail-send href="#" hidden title="<?= $escape($t('common.send')) ?>" aria-label="<?= $escape($t('common.send')) ?>">
+              <?= $escape($t('common.send')) ?>
+            </a>
           </div>
         </div>
 

@@ -928,7 +928,7 @@ final class ScanService
             $index = new LibraryIndex($sqlitePath);
 
             try {
-                return $index->exportBookSnapshotsByPath();
+                return $index->exportScanSnapshotsByPath();
             } finally {
                 $index->close();
             }
