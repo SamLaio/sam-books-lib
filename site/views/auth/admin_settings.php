@@ -20,6 +20,8 @@ $smtpConfigured = !empty($smtpConfigured);
 $coverRebuildBusy = !empty($coverRebuildBusy);
 $availableLocales = is_array($availableLocales ?? null) ? $availableLocales : ['zhTW', 'en'];
 $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
+$loginMaxAttempts = max(0, min(100, (int) ($appSettings['login_max_attempts'] ?? 5)));
+$magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) === '1';
 ?>
 <div class="wrap">
   <div class="panel">
@@ -91,6 +93,14 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
 
       <?php if ($showUserManagement): ?>
         <section id="admin-tab-users" class="admin-tabs__panel" role="tabpanel" data-tab-panel="users" <?= $activeTab === 'users' ? '' : 'hidden' ?>>
+          <h2><?= $escape($t('admin.login_attempt_settings_heading')) ?></h2>
+          <form method="post" action="admin_settings.php" class="search-form">
+            <input type="hidden" name="action" value="admin_update_login_attempts">
+            <input type="hidden" name="active_tab" value="users">
+            <input type="number" name="login_max_attempts" value="<?= $loginMaxAttempts ?>" min="0" max="100" aria-label="<?= $escape($t('admin.max_login_attempts')) ?>">
+            <button type="submit"><?= $escape($t('admin.update_login_attempts')) ?></button>
+          </form>
+
           <h2><?= $escape($t('admin.create_user_heading')) ?></h2>
           <form method="post" action="admin_settings.php" class="search-form">
             <input type="hidden" name="action" value="admin_create_user">
@@ -114,6 +124,7 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
               $managedEmail = (string) ($managed['email'] ?? '');
               $managedEnabled = (int) ($managed['is_enabled'] ?? 1) === 1;
               $managedIsDefault = (int) ($managed['is_default'] ?? 0) === 1;
+              $managedFailedAttempts = max(0, (int) ($managed['failed_login_attempts'] ?? 0));
               $managedHiddenAuthors = is_array($managed['hidden_authors_list'] ?? null) ? $managed['hidden_authors_list'] : [];
               $managedHiddenTags = is_array($managed['hidden_tags_list'] ?? null) ? $managed['hidden_tags_list'] : [];
               $managedHiddenAuthorsValue = implode('; ', $managedHiddenAuthors);
@@ -165,6 +176,11 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
                         <span><?= $escape($t('common.enabled')) ?></span>
                       </label>
                     <?php endif; ?>
+                  </div>
+
+                  <div class="admin-user-mobile-dialog__field">
+                    <span><?= $escape($t('admin.failed_login_attempts_label')) ?></span>
+                    <small><?= $escape($t('admin.failed_login_attempts', ['count' => (string) $managedFailedAttempts])) ?></small>
                   </div>
 
                   <div class="admin-user-mobile-dialog__actions">
@@ -234,13 +250,14 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
           </div>
 
           <div class="admin-users-table-wrap">
-            <table class="admin-users-table">
+            <table class="admin-users-table admin-users-table--users">
               <thead>
                 <tr>
                   <th><?= $escape($t('admin.account')) ?></th>
                   <th><?= $escape($t('admin.new_password_optional')) ?></th>
                   <th><?= $escape($t('common.email')) ?></th>
                   <th><?= $escape($t('common.enabled')) ?></th>
+                  <th><?= $escape($t('admin.failed_login_attempts_label')) ?></th>
                   <th><?= $escape($t('common.actions')) ?></th>
                 </tr>
               </thead>
@@ -252,6 +269,7 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
                   $managedEmail = (string) ($managed['email'] ?? '');
                   $managedEnabled = (int) ($managed['is_enabled'] ?? 1) === 1;
                   $managedIsDefault = (int) ($managed['is_default'] ?? 0) === 1;
+                  $managedFailedAttempts = max(0, (int) ($managed['failed_login_attempts'] ?? 0));
                   $managedHiddenAuthors = is_array($managed['hidden_authors_list'] ?? null) ? $managed['hidden_authors_list'] : [];
                   $managedHiddenTags = is_array($managed['hidden_tags_list'] ?? null) ? $managed['hidden_tags_list'] : [];
                   $managedHiddenAuthorsValue = implode('; ', $managedHiddenAuthors);
@@ -261,6 +279,12 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
                   ?>
                   <tr>
                     <td>
+                      <form id="<?= $escape($formId) ?>" method="post" action="admin_settings.php">
+                        <input type="hidden" name="action" value="admin_update_user">
+                        <input type="hidden" name="active_tab" value="users">
+                        <input type="hidden" name="target_user_id" value="<?= $managedId ?>">
+                        <input type="hidden" name="target_enabled" value="<?= $managedIsDefault ? '1' : '0' ?>">
+                      </form>
                       <input form="<?= $escape($formId) ?>" type="text" name="target_username" value="<?= $escape($managedUsername) ?>" required>
                       <?php if ($managedIsDefault): ?>
                         <div class="book-version-note"><?= $escape($t('admin.default_admin')) ?></div>
@@ -275,11 +299,12 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
                     <td>
                       <?php if ($managedIsDefault): ?>
                         <span><?= $escape($t('admin.fixed_enabled')) ?></span>
-                        <input form="<?= $escape($formId) ?>" type="hidden" name="target_enabled" value="1">
                       <?php else: ?>
-                        <input form="<?= $escape($formId) ?>" type="hidden" name="target_enabled" value="0">
                         <input form="<?= $escape($formId) ?>" type="checkbox" name="target_enabled" value="1" <?= $managedEnabled ? 'checked' : '' ?>>
                       <?php endif; ?>
+                    </td>
+                    <td>
+                      <?= $escape($t('admin.failed_login_attempts', ['count' => (string) $managedFailedAttempts])) ?>
                     </td>
                     <td>
                       <div class="admin-user-actions">
@@ -291,11 +316,6 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
                           <button type="submit" form="admin-user-delete-<?= $managedId ?>" class="button-danger"><?= $escape($t('common.delete')) ?></button>
                         <?php endif; ?>
                       </div>
-                      <form id="<?= $escape($formId) ?>" method="post" action="admin_settings.php">
-                        <input type="hidden" name="action" value="admin_update_user">
-                        <input type="hidden" name="active_tab" value="users">
-                        <input type="hidden" name="target_user_id" value="<?= $managedId ?>">
-                      </form>
                       <?php if (!$managedIsDefault): ?>
                         <form id="admin-user-delete-<?= $managedId ?>" method="post" action="admin_settings.php" onsubmit="return confirm('<?= $escape($t('admin.confirm_delete_user')) ?>');">
                           <input type="hidden" name="action" value="admin_delete_user">
@@ -392,6 +412,21 @@ $defaultLocale = (string) ($appSettings['default_locale'] ?? 'zhTW');
       <section id="admin-tab-maintenance" class="admin-tabs__panel" role="tabpanel" data-tab-panel="maintenance" <?= $activeTab === 'maintenance' ? '' : 'hidden' ?>>
         <h2><?= $escape($t('admin.maintenance_heading')) ?></h2>
         <div class="maintenance-sections">
+          <?php if ($showUserManagement): ?>
+            <div class="maintenance-section">
+              <h3><?= $escape($t('admin.magic_login_heading')) ?></h3>
+              <form method="post" action="admin_settings.php" class="search-form">
+                <input type="hidden" name="action" value="admin_update_magic_login">
+                <input type="hidden" name="active_tab" value="maintenance">
+                <label>
+                  <input type="checkbox" name="magic_login_enabled" value="1" <?= $magicLoginEnabled ? 'checked' : '' ?>>
+                  <?= $escape($t('admin.magic_login_enabled')) ?>
+                </label>
+                <button type="submit"><?= $escape($t('admin.update_magic_login')) ?></button>
+              </form>
+            </div>
+          <?php endif; ?>
+
           <div class="maintenance-section">
             <h3><?= $escape($t('admin.default_locale_heading')) ?></h3>
             <form method="post" action="admin_settings.php" class="search-form">

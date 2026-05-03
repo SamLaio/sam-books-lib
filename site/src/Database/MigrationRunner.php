@@ -501,6 +501,64 @@ final class MigrationRunner
                     $pdo->exec('UPDATE users SET ui_theme_updated_at = COALESCE(NULLIF(ui_theme_updated_at, ""), updated_at, CURRENT_TIMESTAMP)');
                 },
             ],
+            [
+                'name' => '202605030001_add_login_attempt_limits',
+                'signature' => 'add_login_attempt_limits_v1',
+                'up' => function (\PDO $pdo): void {
+                    $this->ensureColumn($pdo, 'users', 'failed_login_attempts', 'INTEGER NOT NULL DEFAULT 0');
+                    $pdo->exec('UPDATE users SET failed_login_attempts = 0 WHERE failed_login_attempts IS NULL OR failed_login_attempts < 0');
+                },
+            ],
+            [
+                'name' => '202605030002_add_login_attempt_app_setting',
+                'signature' => 'add_login_attempt_app_setting_v1',
+                'up' => function (\PDO $pdo): void {
+                    $pdo->exec(
+                        "INSERT OR IGNORE INTO app_settings(setting_key, setting_value, updated_at)
+                         VALUES('login_max_attempts', '5', CURRENT_TIMESTAMP)"
+                    );
+                },
+            ],
+            [
+                'name' => '202605030003_create_magic_login_tokens',
+                'signature' => 'create_magic_login_tokens_v1',
+                'up' => function (\PDO $pdo): void {
+                    $pdo->exec(
+                        'CREATE TABLE IF NOT EXISTS magic_login_tokens (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            token_hash TEXT NOT NULL UNIQUE,
+                            browser_nonce TEXT NOT NULL,
+                            user_id INTEGER,
+                            status TEXT NOT NULL DEFAULT "pending",
+                            expires_at TEXT NOT NULL,
+                            consumed_at TEXT,
+                            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                            authenticated_at TEXT,
+                            authenticated_ip TEXT
+                        )'
+                    );
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_magic_login_status_expires ON magic_login_tokens(status, expires_at)');
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_magic_login_browser_nonce ON magic_login_tokens(browser_nonce)');
+                },
+            ],
+            [
+                'name' => '202605030004_ensure_magic_login_rate_limit_columns',
+                'signature' => 'ensure_magic_login_rate_limit_columns_v1',
+                'up' => function (\PDO $pdo): void {
+                    $this->ensureColumn($pdo, 'magic_login_tokens', 'created_ip', 'TEXT NOT NULL DEFAULT ""');
+                    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_magic_login_created_ip_created_at ON magic_login_tokens(created_ip, created_at)');
+                },
+            ],
+            [
+                'name' => '202605030005_add_magic_login_app_setting',
+                'signature' => 'add_magic_login_app_setting_v1',
+                'up' => function (\PDO $pdo): void {
+                    $pdo->exec(
+                        "INSERT OR IGNORE INTO app_settings(setting_key, setting_value, updated_at)
+                         VALUES('magic_login_enabled', '1', CURRENT_TIMESTAMP)"
+                    );
+                },
+            ],
         ];
     }
 

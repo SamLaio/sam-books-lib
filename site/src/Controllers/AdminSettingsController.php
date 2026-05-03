@@ -36,7 +36,7 @@ final class AdminSettingsController
         $user = null;
         if ($authEnabled) {
             $this->authService->ensureSettingsDatabaseReady();
-            $this->authService->requireLogin($server);
+            $this->requireAuthenticated($server);
             $user = $this->authService->getCurrentUser();
             if (!is_array($user)) {
                 header('Location: index.php', true, 302);
@@ -47,6 +47,7 @@ final class AdminSettingsController
                 header('Location: index.php', true, 302);
                 exit;
             }
+            $this->authService->clearRecoveredPasswordFileForCurrentAdmin();
         } else {
             $user = [
                 'id' => 0,
@@ -100,6 +101,12 @@ final class AdminSettingsController
                         ((string) ($post['enabled'] ?? '1')) === '1'
                     );
                     $notice = Lang::t('message.user_created');
+                } elseif ($action === 'admin_update_login_attempts') {
+                    if (!$showUserManagement) {
+                        throw new \RuntimeException(Lang::t('error.user_management_disabled'));
+                    }
+                    $this->authService->updateLoginMaxAttempts((int) ($post['login_max_attempts'] ?? 5));
+                    $notice = Lang::t('message.login_attempts_updated');
                 } elseif ($action === 'admin_update_user') {
                     if (!$showUserManagement) {
                         throw new \RuntimeException(Lang::t('error.user_management_disabled'));
@@ -145,6 +152,13 @@ final class AdminSettingsController
                 } elseif ($action === 'admin_update_default_locale') {
                     $this->authService->updateDefaultLocale((string) ($post['default_locale'] ?? ''));
                     $notice = Lang::t('message.default_locale_updated');
+                } elseif ($action === 'admin_update_magic_login') {
+                    if (!$showUserManagement) {
+                        throw new \RuntimeException(Lang::t('error.user_management_disabled'));
+                    }
+                    $this->authService->updateMagicLoginEnabled(((string) ($post['magic_login_enabled'] ?? '0')) === '1');
+                    $notice = Lang::t('message.magic_login_settings_updated');
+                    $activeTab = 'maintenance';
                 } elseif ($action === 'admin_send_test_email') {
                     $appSettings = $this->authService->getAppSettings();
                     if (!$this->authService->isSmtpConfigured($appSettings)) {
@@ -282,6 +296,11 @@ final class AdminSettingsController
             'versionSignature' => $this->buildVersionSignature(),
             'smtpConfigured' => $this->authService->isSmtpConfigured(),
         ]);
+    }
+
+    private function requireAuthenticated(array $server): void
+    {
+        (new AuthLoginController($this->appRoot, $this->view, $this->authService))->requireAuthenticated($server);
     }
 
     private function parseDelimitedValues(string $raw): array

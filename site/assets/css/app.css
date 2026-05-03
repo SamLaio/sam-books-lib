@@ -120,11 +120,41 @@ input[type="search"] {
 }
 
 input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0 6px;
+  border: 2px solid #8b8b8b;
+  border-radius: 4px;
+  background: transparent;
   vertical-align: middle;
   cursor: pointer;
+}
+
+input[type="checkbox"]::before {
+  content: "";
+  width: 14px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 0 4px 4px;
+  opacity: 0;
+  transform: translateY(-1px) rotate(-45deg);
+}
+
+input[type="checkbox"]:checked {
+  border-color: #0d9488;
+  background: #0d9488;
+}
+
+input[type="checkbox"]:checked::before {
+  opacity: 1;
+}
+
+input[type="checkbox"]:focus-visible {
+  outline: 3px solid color-mix(in srgb, #0d9488 55%, white 45%);
+  outline-offset: 2px;
 }
 
 .login-form {
@@ -165,6 +195,68 @@ input[type="checkbox"] {
   min-width: 120px;
   min-height: 56px;
   font-size: 18px;
+}
+
+.login-form__actions {
+  display: flex;
+  flex: 0 0 100%;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.login-form__actions .login-form__submit {
+  background: #14aaa6;
+}
+
+.login-form__actions .login-form__submit:hover {
+  background: #0d9488;
+}
+
+.magic-login-button {
+  background: #137f76;
+}
+
+.magic-login-button:hover {
+  background: #0f766e;
+}
+
+.magic-login-panel {
+  flex: 0 0 100%;
+  width: 100%;
+}
+
+.magic-login-panel__body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.magic-login-panel__qr {
+  display: block;
+  width: 180px;
+  height: 180px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.magic-login-panel__details {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.magic-login-panel__details a {
+  overflow-wrap: anywhere;
+}
+
+.magic-authorize-user {
+  flex: 0 0 100%;
+  color: var(--muted);
 }
 
 .captcha-group {
@@ -567,6 +659,45 @@ table {
   min-width: 760px;
 }
 
+.admin-users-table--users {
+  min-width: 0;
+}
+
+.admin-users-table--users th:nth-child(1),
+.admin-users-table--users td:nth-child(1) {
+  width: 16.5%;
+}
+
+.admin-users-table--users th:nth-child(2),
+.admin-users-table--users td:nth-child(2) {
+  width: 15%;
+}
+
+.admin-users-table--users th:nth-child(3),
+.admin-users-table--users td:nth-child(3) {
+  width: 20%;
+}
+
+.admin-users-table--users th:nth-child(4),
+.admin-users-table--users td:nth-child(4) {
+  width: 9.5%;
+}
+
+.admin-users-table--users th:nth-child(5),
+.admin-users-table--users td:nth-child(5) {
+  width: 14%;
+}
+
+.admin-users-table--users th:nth-child(6),
+.admin-users-table--users td:nth-child(6) {
+  width: 25%;
+}
+
+.admin-users-table--users th,
+.admin-users-table--users td {
+  vertical-align: top;
+}
+
 .admin-users-table td input[type="text"],
 .admin-users-table td input[type="email"],
 .admin-users-table td input[type="password"] {
@@ -589,7 +720,19 @@ table {
   gap: 8px;
 }
 
+.admin-users-table--users .admin-user-actions {
+  align-items: flex-start;
+}
+
+.admin-users-table--users .admin-user-actions button {
+  min-width: 78px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
 .admin-user-actions__note {
+  display: block;
+  width: 100%;
   color: var(--muted);
   font-size: 13px;
 }
@@ -1003,9 +1146,9 @@ td.col-read {
 }
 
 .read-checkbox input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent);
+  width: 24px;
+  height: 24px;
+  margin: 0;
 }
 
 .empty-row {
@@ -1653,8 +1796,12 @@ body[data-theme="dark"] select {
 
 body[data-theme="dark"] input[type="checkbox"] {
   color-scheme: dark;
-  background: #0f172a;
   border-color: #6b7280;
+}
+
+body[data-theme="dark"] input[type="checkbox"]:checked {
+  border-color: #0d9488;
+  background: #0d9488;
 }
 
 body[data-theme="dark"] .captcha-image {
@@ -1881,9 +2028,25 @@ body[data-theme="dark"] .admin-job-mobile-card {
   .login-form__field--half,
   .login-form input[type="text"],
   .login-form input[type="password"],
+  .login-form__actions,
   .login-form__submit {
     width: 100%;
     flex: 1 1 100%;
+  }
+
+  .login-form__actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .magic-login-panel__body {
+    grid-template-columns: 1fr;
+  }
+
+  .magic-login-panel__qr {
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
   }
 
   .captcha-group {

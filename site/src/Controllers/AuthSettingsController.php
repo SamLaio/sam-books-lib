@@ -36,7 +36,7 @@ final class AuthSettingsController
 
         $this->authService->ensureSettingsDatabaseReady();
 
-        $this->authService->requireLogin($server);
+        $this->requireAuthenticated($server);
         $user = $this->authService->getCurrentUser();
         if (!is_array($user)) {
             header('Location: login.php', true, 302);
@@ -112,5 +112,10 @@ final class AuthSettingsController
             'opdsTokenUrl' => $opdsTokenUrl,
             'scanRunning' => $scanRunning,
         ]);
+    }
+
+    private function requireAuthenticated(array $server): void
+    {
+        (new AuthLoginController($this->appRoot, $this->view, $this->authService))->requireAuthenticated($server);
     }
 }

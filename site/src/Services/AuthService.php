@@ -19,6 +19,7 @@ final class AuthService
     private const CATALOG_STATE_COOKIE_TTL = 2592000;
     private const SORT_COOKIE_TTL = 31536000;
     private const ALLOWED_SORT_FIELDS = ['is_read', 'title', 'author', 'series', 'added_at'];
+    private const DEFAULT_MAX_LOGIN_ATTEMPTS = 5;
 
     private string $appRoot;
     private ScanService $scanService;
@@ -101,7 +102,7 @@ final class AuthService
         $this->ensureSessionStarted();
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, password_hash, role, is_enabled, is_default
+            'SELECT id, username, password_hash, role, is_enabled, is_default, failed_login_attempts
              FROM users
              WHERE username = :username
              LIMIT 1'
@@ -124,6 +125,7 @@ final class AuthService
         $matchedKey = $this->resolveMatchedSecretKey($password, $passwordHash);
 
         if ($matchedKey === null) {
+            $this->recordFailedLoginAttempt($user);
             return false;
         }
 
@@ -145,6 +147,9 @@ final class AuthService
         $_SESSION['auth_username'] = (string) $user['username'];
         $_SESSION['auth_user_role'] = $this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER));
         $_SESSION['auth_password_change_required'] = $this->shouldForceDefaultAdminPasswordChange($user, $username, $password) ? 1 : 0;
+        $this->resetFailedLoginAttempts((int) $user['id']);
+        $this->clearRecoveredPasswordFileForAdmin($this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER)));
+        session_regenerate_id(true);
 
         return true;
     }
@@ -231,6 +236,38 @@ final class AuthService
         session_destroy();
     }
 
+    public function loginByUserId(int $userId): bool
+    {
+        if (!$this->isEnabled() || $userId < 1) {
+            return false;
+        }
+
+        $this->ensureBootstrapUserSeeded();
+        $this->ensureSessionStarted();
+
+        $stmt = $this->getPdo()->prepare(
+            'SELECT id, username, role, is_enabled
+             FROM users
+             WHERE id = :id
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $userId]);
+        $user = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($user) || (int) ($user['is_enabled'] ?? 1) !== 1) {
+            return false;
+        }
+
+        $_SESSION['auth_user_id'] = (int) $user['id'];
+        $_SESSION['auth_username'] = (string) $user['username'];
+        $_SESSION['auth_user_role'] = $this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER));
+        $_SESSION['auth_password_change_required'] = 0;
+        $this->resetFailedLoginAttempts((int) $user['id']);
+        $this->clearRecoveredPasswordFileForAdmin($this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER)));
+        session_regenerate_id(true);
+
+        return true;
+    }
+
     public function getCurrentUser(): ?array
     {
         if (!$this->isAuthenticated()) {
@@ -264,6 +301,13 @@ final class AuthService
         return $this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER)) === self::ROLE_ADMIN;
     }
 
+    public function clearRecoveredPasswordFileForCurrentAdmin(): void
+    {
+        if ($this->isCurrentUserAdmin()) {
+            $this->clearRecoveredPasswordFileForAdmin(self::ROLE_ADMIN);
+        }
+    }
+
     public function updateCurrentUserEmail(string $email): void
     {
         if (!$this->isEnabled()) {
@@ -290,8 +334,10 @@ final class AuthService
 
     public function listUsers(): array
     {
+        $this->enforceLoginAttemptLimit();
+
         $stmt = $this->getPdo()->query(
-            'SELECT id, username, email, role, is_enabled, is_default, ui_locale, hidden_authors, hidden_tags, created_at, updated_at
+            'SELECT id, username, email, role, is_enabled, is_default, failed_login_attempts, ui_locale, hidden_authors, hidden_tags, created_at, updated_at
              FROM users
              ORDER BY is_default DESC, id ASC'
         );
@@ -305,11 +351,18 @@ final class AuthService
             $row['role'] = $this->normalizeRole((string) ($row['role'] ?? self::ROLE_USER));
             $row['is_enabled'] = (int) ($row['is_enabled'] ?? 1) === 1 ? 1 : 0;
             $row['is_default'] = (int) ($row['is_default'] ?? 0) === 1 ? 1 : 0;
+            $row['failed_login_attempts'] = max(0, (int) ($row['failed_login_attempts'] ?? 0));
             return $row;
         }, $rows);
     }
 
-    public function createUser(string $username, string $password, string $email = '', string $role = self::ROLE_USER, bool $enabled = true): void
+    public function createUser(
+        string $username,
+        string $password,
+        string $email = '',
+        string $role = self::ROLE_USER,
+        bool $enabled = true
+    ): void
     {
         $normalizedUsername = $this->normalizeUsername($username);
 
@@ -332,10 +385,10 @@ final class AuthService
 
         $stmt = $this->getPdo()->prepare(
             'INSERT INTO users(
-                username, email, password_hash, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
+                username, email, password_hash, role, is_enabled, failed_login_attempts, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
              )
              VALUES(
-                :username, :email, :password_hash, :role, :is_enabled, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :username, :email, :password_hash, :role, :is_enabled, 0, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
              )'
         );
 
@@ -375,7 +428,7 @@ final class AuthService
         }
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, role, is_default
+            'SELECT id, username, role, is_enabled, is_default
              FROM users
              WHERE id = :id
              LIMIT 1'
@@ -407,12 +460,18 @@ final class AuthService
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :id'
             );
+            $enabledValue = $enabled ? 1 : 0;
+            $currentEnabledValue = (int) ($target['is_enabled'] ?? 1) === 1 ? 1 : 0;
             $update->execute([
                 ':id' => $targetUserId,
                 ':username' => $normalizedUsername,
                 ':email' => $normalizedEmail,
-                ':is_enabled' => $enabled ? 1 : 0,
+                ':is_enabled' => $enabledValue,
             ]);
+
+            if ($enabledValue !== $currentEnabledValue) {
+                $this->resetFailedLoginAttempts($targetUserId);
+            }
 
             if ($newPassword !== null) {
                 $trimmed = trim($newPassword);
@@ -518,6 +577,8 @@ final class AuthService
 
         $defaults = [
             'default_locale' => $this->getConfiguredDefaultLocale(),
+            'login_max_attempts' => (string) self::DEFAULT_MAX_LOGIN_ATTEMPTS,
+            'magic_login_enabled' => '1',
             'smtp_host' => '',
             'smtp_port' => '',
             'smtp_username' => '',
@@ -574,6 +635,101 @@ final class AuthService
         return true;
     }
 
+    public function getLoginMaxAttempts(): int
+    {
+        $settings = $this->readAppSettingsFromDb();
+
+        return $this->normalizeMaxLoginAttempts((int) ($settings['login_max_attempts'] ?? self::DEFAULT_MAX_LOGIN_ATTEMPTS));
+    }
+
+    public function updateLoginMaxAttempts(int $maxAttempts): int
+    {
+        $normalized = $this->normalizeMaxLoginAttempts($maxAttempts);
+        $stmt = $this->getPdo()->prepare(
+            'INSERT INTO app_settings(setting_key, setting_value, updated_at)
+             VALUES(:setting_key, :setting_value, CURRENT_TIMESTAMP)
+             ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value,
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        $stmt->execute([
+            ':setting_key' => 'login_max_attempts',
+            ':setting_value' => (string) $normalized,
+        ]);
+        $this->enforceLoginAttemptLimit($normalized);
+
+        return $normalized;
+    }
+
+    public function isMagicLoginEnabled(): bool
+    {
+        $settings = $this->readAppSettingsFromDb();
+
+        return ((string) ($settings['magic_login_enabled'] ?? '1')) === '1';
+    }
+
+    public function updateMagicLoginEnabled(bool $enabled): void
+    {
+        $stmt = $this->getPdo()->prepare(
+            'INSERT INTO app_settings(setting_key, setting_value, updated_at)
+             VALUES(:setting_key, :setting_value, CURRENT_TIMESTAMP)
+             ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value,
+                updated_at = CURRENT_TIMESTAMP'
+        );
+        $stmt->execute([
+            ':setting_key' => 'magic_login_enabled',
+            ':setting_value' => $enabled ? '1' : '0',
+        ]);
+    }
+
+    public function recordFailedLoginAttemptForUsername(string $username): void
+    {
+        $username = trim($username);
+        if ($username === '') {
+            return;
+        }
+
+        $this->ensureBootstrapUserSeeded();
+
+        $stmt = $this->getPdo()->prepare(
+            'SELECT id, username, role, is_enabled, failed_login_attempts
+             FROM users
+             WHERE username = :username
+             LIMIT 1'
+        );
+        $stmt->execute([':username' => $username]);
+        $user = $stmt->fetch(\PDO::FETCH_ASSOC);
+        if (!is_array($user) || (int) ($user['is_enabled'] ?? 1) !== 1) {
+            return;
+        }
+
+        $this->recordFailedLoginAttempt($user);
+    }
+
+    public function enforceLoginAttemptLimit(?int $maxAttempts = null): void
+    {
+        $normalizedMaxAttempts = $maxAttempts === null
+            ? $this->getLoginMaxAttempts()
+            : $this->normalizeMaxLoginAttempts($maxAttempts);
+        if ($normalizedMaxAttempts < 1) {
+            return;
+        }
+
+        $stmt = $this->getPdo()->prepare(
+            "UPDATE users
+             SET is_enabled = 0,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE role != :admin_role
+               AND is_enabled = 1
+               AND failed_login_attempts >= :max_attempts"
+        );
+        $stmt->execute([
+            ':admin_role' => self::ROLE_ADMIN,
+            ':max_attempts' => $normalizedMaxAttempts,
+        ]);
+    }
+
     private function syncSmtpSettingsFromConfig(): void
     {
         if ($this->smtpConfigSynced) {
@@ -620,6 +776,8 @@ final class AuthService
     {
         $defaults = [
             'default_locale' => $this->getConfiguredDefaultLocale(),
+            'login_max_attempts' => (string) self::DEFAULT_MAX_LOGIN_ATTEMPTS,
+            'magic_login_enabled' => '1',
             'smtp_host' => '',
             'smtp_port' => '',
             'smtp_username' => '',
@@ -1022,6 +1180,144 @@ final class AuthService
         return is_array($row) ? $row : null;
     }
 
+    private function recordFailedLoginAttempt(array $user): void
+    {
+        $userId = (int) ($user['id'] ?? 0);
+        if ($userId < 1) {
+            return;
+        }
+
+        $role = $this->normalizeRole((string) ($user['role'] ?? self::ROLE_USER));
+        $failedAttempts = max(0, (int) ($user['failed_login_attempts'] ?? 0)) + 1;
+        $maxAttempts = $this->getLoginMaxAttempts();
+        $limitReached = $maxAttempts > 0 && $failedAttempts >= $maxAttempts;
+
+        if ($role === self::ROLE_ADMIN && $limitReached) {
+            $this->resetAdminPasswordAfterFailedAttempts($userId, (string) ($user['username'] ?? ''));
+            return;
+        }
+
+        $shouldDisable = $role !== self::ROLE_ADMIN && $limitReached;
+
+        $stmt = $this->getPdo()->prepare(
+            'UPDATE users
+             SET failed_login_attempts = :failed_login_attempts,
+                 is_enabled = CASE WHEN :should_disable = 1 THEN 0 ELSE is_enabled END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        );
+        $stmt->execute([
+            ':id' => $userId,
+            ':failed_login_attempts' => $failedAttempts,
+            ':should_disable' => $shouldDisable ? 1 : 0,
+        ]);
+    }
+
+    private function resetAdminPasswordAfterFailedAttempts(int $userId, string $username): void
+    {
+        $newPassword = $this->generateRecoveryPassword();
+        $pdo = $this->getPdo();
+        $pdo->exec('BEGIN IMMEDIATE');
+        try {
+            $stmt = $pdo->prepare(
+                'UPDATE users
+                 SET password_hash = :password_hash,
+                     failed_login_attempts = 0,
+                     updated_at = CURRENT_TIMESTAMP
+                 WHERE id = :id'
+            );
+            $stmt->execute([
+                ':id' => $userId,
+                ':password_hash' => password_hash($this->pepper($newPassword), PASSWORD_DEFAULT),
+            ]);
+
+            $this->writeRecoveredPasswordFile($username, $newPassword);
+            $pdo->exec('COMMIT');
+        } catch (\Throwable $e) {
+            try {
+                $pdo->exec('ROLLBACK');
+            } catch (\Throwable) {
+            }
+            throw $e;
+        }
+    }
+
+    private function generateRecoveryPassword(): string
+    {
+        $lower = 'abcdefghijkmnopqrstuvwxyz';
+        $upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+        $digits = '23456789';
+        $symbols = '!@#$%^&*_-+=';
+        $all = $lower . $upper . $digits . $symbols;
+
+        $chars = [
+            $lower[random_int(0, strlen($lower) - 1)],
+            $upper[random_int(0, strlen($upper) - 1)],
+            $digits[random_int(0, strlen($digits) - 1)],
+            $symbols[random_int(0, strlen($symbols) - 1)],
+        ];
+
+        for ($i = count($chars); $i < 16; $i++) {
+            $chars[] = $all[random_int(0, strlen($all) - 1)];
+        }
+
+        for ($i = count($chars) - 1; $i > 0; $i--) {
+            $j = random_int(0, $i);
+            [$chars[$i], $chars[$j]] = [$chars[$j], $chars[$i]];
+        }
+
+        return implode('', $chars);
+    }
+
+    private function writeRecoveredPasswordFile(string $username, string $newPassword): void
+    {
+        $dataDir = $this->appRoot . DIRECTORY_SEPARATOR . 'data';
+        if (!is_dir($dataDir) && !mkdir($dataDir, 0755, true) && !is_dir($dataDir)) {
+            throw new \RuntimeException('Cannot create data directory for recovered password.');
+        }
+
+        $path = $dataDir . DIRECTORY_SEPARATOR . 'new_pass.txt';
+        $content = sprintf(
+            "username=%s\npassword=%s\ngenerated_at=%s\n",
+            $username,
+            $newPassword,
+            gmdate('c')
+        );
+
+        if (file_put_contents($path, $content, LOCK_EX) === false) {
+            throw new \RuntimeException('Cannot write recovered admin password file.');
+        }
+
+        @chmod($path, 0600);
+    }
+
+    private function resetFailedLoginAttempts(int $userId): void
+    {
+        if ($userId < 1) {
+            return;
+        }
+
+        $stmt = $this->getPdo()->prepare(
+            'UPDATE users
+             SET failed_login_attempts = 0,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = :id'
+        );
+        $stmt->execute([':id' => $userId]);
+    }
+
+    private function clearRecoveredPasswordFileForAdmin(string $role): void
+    {
+        if ($this->normalizeRole($role) !== self::ROLE_ADMIN) {
+            return;
+        }
+
+        $path = $this->appRoot . DIRECTORY_SEPARATOR . 'data' . DIRECTORY_SEPARATOR . 'new_pass.txt';
+        if (is_file($path)) {
+            @unlink($path);
+        }
+    }
+
     public function ensureBootstrapUser(): void
     {
         if (!$this->isEnabled()) {
@@ -1180,6 +1476,28 @@ final class AuthService
     public function hasAnyUser(): bool
     {
         return (int) $this->getPdo()->query('SELECT COUNT(*) FROM users')->fetchColumn() > 0;
+    }
+
+    public function isUsernameDisabled(string $username): bool
+    {
+        $username = trim($username);
+        if ($username === '') {
+            return false;
+        }
+
+        $stmt = $this->getPdo()->prepare(
+            'SELECT is_enabled
+             FROM users
+             WHERE username = :username
+             LIMIT 1'
+        );
+        $stmt->execute([':username' => $username]);
+        $value = $stmt->fetchColumn();
+        if ($value === false) {
+            return false;
+        }
+
+        return (int) $value !== 1;
     }
 
     public function getSettingsDbPath(): string
@@ -1730,6 +2048,11 @@ final class AuthService
         if (!preg_match('/[^A-Za-z0-9]/', $password)) {
             throw new \RuntimeException(Lang::t('error.password_require_symbol', ['label' => $label]));
         }
+    }
+
+    private function normalizeMaxLoginAttempts(int $value): int
+    {
+        return max(0, min(100, $value));
     }
 
     private function normalizeEmail(string $email): string
