@@ -159,7 +159,7 @@ volumes:
 
 安全限制：
 
-- magic token 僅儲存雜湊值，不以明文寫入資料庫。
+- magic token 使用 128-bit 隨機值（32 個 hex 字元），僅儲存雜湊值，不以明文寫入資料庫。
 - token 綁定原設備 session，第三方不能只靠連結接收登入。
 - 授權表單有 CSRF 與同源檢查。
 - QR code 由後端產生 PNG，不依賴外部服務。

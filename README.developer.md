@@ -225,7 +225,7 @@ docker compose exec -T sam-books-lib php /var/www/html/migrate.php migrate all
 
 - 魔術登入開關存在 `app_settings.magic_login_enabled`，預設 `1`。
 - 停用時 `MagicLoginController` 直接回 `404` 空內容，登入頁也不顯示按鈕。
-- token 明文只回前端一次；DB 只存 `token_hash`。
+- token 是 128-bit 隨機值（32 個 hex 字元），明文只回前端一次；DB 只存 `token_hash`。
 - token 綁定原設備 session 的 `browser_nonce`。
 - 授權 POST 必須通過 CSRF token 與 `Origin` / `Referer` 同源檢查。
 - 建立 token 有簡單 IP rate limit：10 分鐘最多 20 次。

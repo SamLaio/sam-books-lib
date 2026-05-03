@@ -254,11 +254,13 @@ final class QrPngService
         }
 
         for ($i = 0; $i < 8; $i++) {
-            $matrix[self::SIZE - 1 - $i][8] = (($format >> $i) & 1) === 1;
+            $matrix[8][self::SIZE - 1 - $i] = (($format >> $i) & 1) === 1;
         }
         for ($i = 8; $i < 15; $i++) {
-            $matrix[8][self::SIZE - 15 + $i] = (($format >> $i) & 1) === 1;
+            $matrix[self::SIZE - 15 + $i][8] = (($format >> $i) & 1) === 1;
         }
+
+        $matrix[self::SIZE - 8][8] = true;
     }
 
     private function formatBits(int $eccLevelBits, int $mask): int

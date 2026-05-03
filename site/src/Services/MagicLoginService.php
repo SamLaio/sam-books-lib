@@ -8,6 +8,8 @@ use Calibre\Support\Lang;
 final class MagicLoginService
 {
     private const TOKEN_TTL_SECONDS = 600;
+    private const TOKEN_BYTES = 16;
+    private const TOKEN_PATTERN = '/^[a-f0-9]{32}$/';
     private const CREATE_RATE_LIMIT_WINDOW_SECONDS = 600;
     private const CREATE_RATE_LIMIT_MAX = 20;
 
@@ -42,7 +44,7 @@ final class MagicLoginService
         $createdIp = $this->clientIp($server);
         $this->assertCreateRateLimit($createdIp);
 
-        $token = bin2hex(random_bytes(32));
+        $token = bin2hex(random_bytes(self::TOKEN_BYTES));
         $expiresAt = gmdate('Y-m-d H:i:s', time() + self::TOKEN_TTL_SECONDS);
         $stmt = $this->pdo->prepare(
             'INSERT INTO magic_login_tokens(token_hash, browser_nonce, status, expires_at, created_at, created_ip)
@@ -174,7 +176,7 @@ final class MagicLoginService
     private function findToken(string $token): ?array
     {
         $token = trim($token);
-        if ($token === '' || preg_match('/^[a-f0-9]{64}$/', $token) !== 1) {
+        if ($token === '' || preg_match(self::TOKEN_PATTERN, $token) !== 1) {
             return null;
         }
 

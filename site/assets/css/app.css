@@ -236,11 +236,13 @@ input[type="checkbox"]:focus-visible {
 
 .magic-login-panel__qr {
   display: block;
-  width: 180px;
-  height: 180px;
+  width: 294px;
+  height: 294px;
+  max-width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: #fff;
+  image-rendering: pixelated;
 }
 
 .magic-login-panel__details {
