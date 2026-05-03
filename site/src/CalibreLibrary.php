@@ -40,21 +40,12 @@ class CalibreLibrary
 
         $metadataDbPath = $this->rootPath . DIRECTORY_SEPARATOR . 'metadata.db';
         $this->databaseKnownBookPaths = [];
-        $hasMetadataDb = false;
         if (is_file($metadataDbPath)) {
-            $hasMetadataDb = true;
             yield from $this->iterateFromDatabase($metadataDbPath);
         }
 
-        // Even with calibre metadata available, loose books may exist anywhere under the
-        // library tree, not only directly under /books. Keep the filesystem pass, but
-        // short-circuit it entirely when every filesystem path is already covered.
-        if ($hasMetadataDb && $this->databaseKnownBookPaths !== []) {
-            if (!$this->hasFilesystemBookOutsideDatabase()) {
-                return;
-            }
-        }
-
+        // After metadata.db, always walk the filesystem and only emit books whose
+        // primary format path was not already represented by the Calibre database.
         yield from $this->iterateFromFilesystem();
     }
 
@@ -135,13 +126,28 @@ class CalibreLibrary
             throw new \RuntimeException("PDO SQLite extension is not loaded. Cannot read metadata.db");
         }
 
+        $escapedPath = str_replace(['?', '#'], ['%3F', '%23'], $dbPath);
+        $dsns = [
+            "sqlite:file:{$escapedPath}?mode=ro&immutable=1",
+            "sqlite:{$dbPath}",
+        ];
+        $lastException = null;
         try {
-            $pdo = new \PDO("sqlite:{$dbPath}");
-            $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
-            return $pdo;
+            foreach ($dsns as $dsn) {
+                try {
+                    $pdo = new \PDO($dsn);
+                    $pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+                    $pdo->exec('PRAGMA query_only = ON');
+                    return $pdo;
+                } catch (\PDOException $e) {
+                    $lastException = $e;
+                }
+            }
         } catch (\PDOException $e) {
-            throw new \RuntimeException("Failed to open metadata.db: " . $e->getMessage());
+            $lastException = $e;
         }
+
+        throw new \RuntimeException("Failed to open metadata.db: " . ($lastException?->getMessage() ?? 'Unknown error'));
     }
 
     private function countBooksFromDatabase(string $dbPath): int
@@ -523,6 +529,9 @@ class CalibreLibrary
         $metadata = isset($snapshot['metadata']) && is_array($snapshot['metadata'])
             ? $snapshot['metadata']
             : [];
+        if (!isset($metadata['source_type']) || trim((string) $metadata['source_type']) === '') {
+            $metadata['source_type'] = 'fs';
+        }
         $metadata['source_mtime'] = $sourceMtime;
 
         $title = trim((string) ($snapshot['title'] ?? ''));

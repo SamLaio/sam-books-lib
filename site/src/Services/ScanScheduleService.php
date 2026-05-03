@@ -45,7 +45,7 @@ final class ScanScheduleService
                 (new MigrationRunner($appRoot))->migrateAuth($this->pdo);
             }
 
-            $this->verifyScheduleSchema();
+            $this->ensureScheduleSchema($runner);
             $this->importLegacyScheduleDb($appRoot);
         } finally {
             $this->releaseRuntimeDbLock($lockHandle);
@@ -732,6 +732,25 @@ final class ScanScheduleService
             'created_at' => $createdAt,
             'payload' => $payload,
         ];
+    }
+
+    private function ensureScheduleSchema(MigrationRunner $runner): void
+    {
+        if ($this->hasScheduleSchema()) {
+            return;
+        }
+
+        $runner->replayTargetSchema('auth', $this->pdo);
+        $this->verifyScheduleSchema();
+    }
+
+    private function hasScheduleSchema(): bool
+    {
+        $stmt = $this->pdo->query(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'scan_jobs' LIMIT 1"
+        );
+
+        return $stmt->fetchColumn() !== false;
     }
 
     private function verifyScheduleSchema(): void

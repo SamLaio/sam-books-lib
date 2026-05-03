@@ -785,9 +785,10 @@ final class ScanService
                 }
 
                 if ($originalCover !== null) {
+                    // Calibre-managed books normally already have cover.jpg beside the book files.
                     $resolvedCover = $originalCover;
                 } elseif ($snapshotCoverPath !== null) {
-                    // Reuse existing detail-cover if already available to avoid re-extracting archive cover.
+                    // For filesystem-only books, reuse our cached cover before extracting again.
                     $resolvedCover = $snapshotCoverPath;
                 } else {
                     $resolvedCover = $library->ensureBookCover($book);

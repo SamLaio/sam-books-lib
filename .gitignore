@@ -1,0 +1,9 @@
+.codex
+/data/**
+/site/data/**
+/.history
+for_nas.yml
+site/vendor/*
+pushDocker.bat
+read
+todolist.txt

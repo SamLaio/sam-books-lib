@@ -13,3 +13,5 @@ site/data/*.corrupt-*
 thumb/*
 site/thumb
 *.log
+read/*
+todolist.txt
