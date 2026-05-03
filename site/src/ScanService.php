@@ -2,6 +2,8 @@
 
 namespace Calibre;
 
+use Calibre\Services\OpdsCacheService;
+
 final class ScanService
 {
     public const JOB_TYPE_SCAN = 'rebuild';
@@ -873,7 +875,12 @@ final class ScanService
                 'scan_max_books_per_run' => $scanMaxBooksPerRun,
             ]);
         } else {
+            $previousDbHash = $this->fileHash($sqlitePath);
             $this->promoteTemporarySqlite($sqlitePath, $temporarySqlitePath);
+            $currentDbHash = $this->fileHash($sqlitePath);
+            if ($currentDbHash !== null && $currentDbHash !== $previousDbHash) {
+                (new OpdsCacheService($this->appRoot))->clearAll();
+            }
             $removedThumbs = $this->synchronizeThumbDirectory($sqlitePath, $thumbDir);
             $this->removeScanResumeFlag($scanResumeFlagPath);
             $this->cleanupScanTemporaryFiles($sqlitePath);
@@ -947,6 +954,17 @@ final class ScanService
         }
 
         return $temporaryPath;
+    }
+
+    private function fileHash(string $path): ?string
+    {
+        if (!is_file($path)) {
+            return null;
+        }
+
+        $hash = @hash_file('sha256', $path);
+
+        return is_string($hash) && $hash !== '' ? $hash : null;
     }
 
     private function promoteTemporarySqlite(string $basePath, string $temporaryPath): void

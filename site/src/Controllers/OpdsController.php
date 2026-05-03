@@ -4,6 +4,7 @@ namespace Calibre\Controllers;
 
 use Calibre\Http\HttpException;
 use Calibre\Services\OpdsAssetService;
+use Calibre\Services\OpdsCacheService;
 use Calibre\Services\OpdsService;
 use Calibre\Support\Lang;
 
@@ -12,15 +13,18 @@ final class OpdsController
     private string $appRoot;
     private OpdsService $opdsService;
     private OpdsAssetService $assetService;
+    private OpdsCacheService $cacheService;
 
     public function __construct(
         string $appRoot,
         ?OpdsService $opdsService = null,
-        ?OpdsAssetService $assetService = null
+        ?OpdsAssetService $assetService = null,
+        ?OpdsCacheService $cacheService = null
     ) {
         $this->appRoot = rtrim($appRoot, DIRECTORY_SEPARATOR);
         $this->opdsService = $opdsService ?? new OpdsService($appRoot);
         $this->assetService = $assetService ?? new OpdsAssetService($appRoot);
+        $this->cacheService = $cacheService ?? new OpdsCacheService($appRoot);
     }
 
     public function handle(array $server, array $query): void
@@ -54,11 +58,15 @@ final class OpdsController
                 $this->streamBinaryResponse($download, $requestMethod, true);
             }
 
-            $this->emitXmlResponse(
-                $this->resolveCatalogContentType($server, $feed),
-                $this->opdsService->renderCatalog($server, $query),
-                $requestMethod
-            );
+            $contentType = $this->resolveCatalogContentType($server, $feed);
+            $cachedXml = $this->cacheService->read($server, $query);
+            if ($cachedXml !== null) {
+                $this->emitXmlResponse($contentType, $cachedXml, $requestMethod);
+            }
+
+            $xml = $this->opdsService->renderCatalog($server, $query);
+            $this->cacheService->write($server, $query, $xml);
+            $this->emitXmlResponse($contentType, $xml, $requestMethod);
         } catch (HttpException $e) {
             $this->failResponse($e->getStatusCode(), $e->getMessage());
         } catch (\Throwable $e) {

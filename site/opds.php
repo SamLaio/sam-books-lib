@@ -7,6 +7,47 @@ require_once __DIR__ . '/bootstrap.php';
 use Calibre\Controllers\OpdsController;
 use Calibre\Services\AuthService;
 
+/**
+ * Emit OPDS-compatible XML error to avoid client-side "failed to parse feed"
+ * when authentication fails.
+ */
+function emitOpdsAuthError(int $status, string $title, string $detail): void
+{
+    http_response_code($status);
+    header('Content-Type: application/atom+xml;profile=opds-catalog;kind=navigation; charset=UTF-8');
+    header('X-Content-Type-Options: nosniff');
+
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    $dom->formatOutput = true;
+
+    $feed = $dom->createElementNS('http://www.w3.org/2005/Atom', 'feed');
+    $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:opds', 'http://opds-spec.org/2010/catalog');
+    $dom->appendChild($feed);
+
+    $id = $dom->createElementNS('http://www.w3.org/2005/Atom', 'id', 'urn:bookslib:opds:error');
+    $feed->appendChild($id);
+    $feed->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'title', $title));
+    $feed->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'updated', gmdate(DATE_ATOM)));
+
+    $entry = $dom->createElementNS('http://www.w3.org/2005/Atom', 'entry');
+    $feed->appendChild($entry);
+    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'id', 'urn:bookslib:opds:error:auth'));
+    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'title', $title));
+    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'updated', gmdate(DATE_ATOM)));
+    $summary = $dom->createElementNS('http://www.w3.org/2005/Atom', 'summary', $detail);
+    $summary->setAttribute('type', 'text');
+    $entry->appendChild($summary);
+
+    echo $dom->saveXML() ?: '';
+    exit;
+}
+
+function logOpdsAuthEvent(string $message): void
+{
+    $logPath = __DIR__ . '/data/opds-auth.log';
+    @file_put_contents($logPath, '[' . gmdate(DATE_ATOM) . '] ' . $message . PHP_EOL, FILE_APPEND);
+}
+
 $authService = new AuthService(__DIR__);
 
 $query = $_GET;
@@ -41,21 +82,28 @@ if ($authService->isEnabled() && $segments !== [] && !in_array(strtolower($segme
     $token = array_shift($feedSegments);
 }
 
+if ($authService->isEnabled() && $token === null) {
+    $queryToken = trim((string) ($query['token'] ?? ''));
+    if ($queryToken !== '') {
+        $token = $queryToken;
+    }
+}
+unset($query['token']);
+
 $isTokenAuthenticated = false;
 if ($authService->isEnabled() && $token !== null) {
     $tokenUser = $authService->findUserByToken($token);
     if (is_array($tokenUser)) {
         $isTokenAuthenticated = true;
         $_SERVER['OPDS_BASE_PATH'] = '/opds/' . rawurlencode($token);
+        logOpdsAuthEvent('token-auth ok uri=' . ((string) ($_SERVER['REQUEST_URI'] ?? '')) . ' user=' . ((string) ($tokenUser['username'] ?? '')));
     }
 }
 
 if ($authService->isEnabled() && !$isTokenAuthenticated) {
     if ($token !== null) {
-        http_response_code(401);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo 'Unauthorized OPDS token.';
-        exit;
+        logOpdsAuthEvent('token-auth fail uri=' . ((string) ($_SERVER['REQUEST_URI'] ?? '')) . ' token_prefix=' . substr($token, 0, 8));
+        emitOpdsAuthError(401, 'Unauthorized', 'Unauthorized OPDS token.');
     }
 
     $isAuthenticated = $authService->isAuthenticated();
@@ -81,11 +129,10 @@ if ($authService->isEnabled() && !$isTokenAuthenticated) {
     }
 
     if (!$isAuthenticated) {
+        logOpdsAuthEvent('basic-auth required uri=' . ((string) ($_SERVER['REQUEST_URI'] ?? '')));
         http_response_code(401);
         header('WWW-Authenticate: Basic realm="myBoooksLib OPDS", charset="UTF-8"');
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo 'Authentication required.';
-        exit;
+        emitOpdsAuthError(401, 'Authentication Required', 'Authentication required.');
     }
 
     $_SERVER['OPDS_BASE_PATH'] = '/opds';
