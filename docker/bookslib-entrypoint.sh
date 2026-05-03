@@ -14,6 +14,7 @@ find "${DATA_DIR}" -maxdepth 1 -type f \( -name '*.sqlite' -o -name '*.sqlite-*'
 
 cat > /usr/local/etc/php/conf.d/zz-bookslib.ini <<EOF
 memory_limit=${PHP_MEMORY_LIMIT:-64M}
+date.timezone=${TZ:-UTC}
 opcache.enable=${PHP_OPCACHE_ENABLE:-1}
 opcache.enable_cli=0
 opcache.memory_consumption=${PHP_OPCACHE_MEMORY_CONSUMPTION:-32}
