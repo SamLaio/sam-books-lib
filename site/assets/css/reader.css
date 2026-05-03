@@ -423,6 +423,20 @@ html[data-theme="dark"] .reader-toc__item {
 }
 
 @media (max-width: 900px) {
+  body {
+    --line: #6b7280;
+  }
+
+  body[data-theme="dark"] {
+    --line: #e5e7eb;
+  }
+
+  .reader-toc,
+  .reader-toc__item,
+  .reader-viewport {
+    border-width: 5px;
+  }
+
   .reader-shell {
     gap: 12px;
   }

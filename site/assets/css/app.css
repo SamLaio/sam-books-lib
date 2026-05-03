@@ -1900,6 +1900,14 @@ body[data-theme="dark"] .admin-job-mobile-card {
 }
 
 @media (max-width: 900px) {
+  body {
+    --line: #6b7280;
+  }
+
+  body[data-theme="dark"] {
+    --line: #e5e7eb;
+  }
+
   .action-buttons {
     flex-wrap: wrap;
   }
@@ -1919,7 +1927,23 @@ body[data-theme="dark"] .admin-job-mobile-card {
   select,
   .theme-fab,
   .scroll-fab {
-    border-width: 2px;
+    border-width: 5px;
+  }
+
+  .logic-picker__panel,
+  .logic-picker__btn,
+  .admin-tabs__nav,
+  .admin-tabs__tab,
+  .admin-user-mobile-link,
+  .admin-job-mobile-card,
+  .admin-visibility-picker,
+  .admin-visibility-picker__option,
+  .page-jump-input,
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"] {
+    border-width: 5px;
   }
 
   .search-help-text {
@@ -1958,7 +1982,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     max-height: 100dvh;
     margin: 0;
     border-radius: 0;
-    border-width: 2px;
+    border-width: 5px;
     overflow-y: auto;
   }
 
@@ -1969,7 +1993,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     max-height: 100dvh;
     margin: 0;
     border-radius: 0;
-    border-width: 2px;
+    border-width: 5px;
     overflow-y: auto;
   }
 
@@ -1988,7 +2012,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     max-height: 100dvh;
     margin: 0;
     border-radius: 0;
-    border-width: 2px;
+    border-width: 5px;
     overflow-y: auto;
   }
 
@@ -2012,7 +2036,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
   .admin-job-mobile-detail-table th,
   .admin-job-mobile-detail-table td {
     display: table-cell;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 5px solid var(--line);
     padding: 8px 6px;
   }
 
@@ -2089,7 +2113,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
   tr {
     display: flex;
     flex-direction: column;
-    border-bottom: 2px solid var(--line);
+    border-bottom: 5px solid var(--line);
     padding: 8px 0;
   }
 
@@ -2121,7 +2145,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     aspect-ratio: 2 / 3;
     object-fit: contain;
     border-radius: 4px;
-    border: 2px solid var(--line);
+    border: 5px solid var(--line);
     background: #f8fafc;
     margin: 0 auto 8px;
   }
@@ -2243,7 +2267,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     flex: 0 0 auto;
     padding: 18px 20px 0;
     border-right: 0;
-    border-bottom: 2px solid var(--line);
+    border-bottom: 5px solid var(--line);
   }
 
   .book-dialog__meta-hint {
