@@ -448,23 +448,26 @@ $magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) ===
           </div>
 
           <div class="maintenance-section">
-            <h3><?= $escape($t('admin.manual_rebuild')) ?></h3>
-            <form method="post" action="admin_settings.php" class="search-form">
-              <input type="hidden" name="action" value="admin_rebuild_index">
-              <input type="hidden" name="active_tab" value="maintenance">
-              <button type="submit"><?= $escape($t('admin.manual_rebuild')) ?></button>
-            </form>
-          </div>
-
-          <div class="maintenance-section">
-            <h3><?= $escape($t('admin.rebuild_cover')) ?></h3>
-            <form method="post" action="admin_settings.php" class="search-form">
-              <input type="hidden" name="action" value="rebuild_cover">
-              <input type="hidden" name="active_tab" value="maintenance">
-              <button type="submit" <?= $coverRebuildBusy ? 'disabled' : '' ?>>
-                <?= $escape($coverRebuildBusy ? $t('admin.rebuild_cover_busy') : $t('admin.rebuild_cover')) ?>
-              </button>
-            </form>
+            <h3><?= $escape($t('admin.rebuild_functions_heading')) ?></h3>
+            <div class="maintenance-actions">
+              <form method="post" action="admin_settings.php" class="search-form">
+                <input type="hidden" name="action" value="admin_rebuild_index">
+                <input type="hidden" name="active_tab" value="maintenance">
+                <button type="submit"><?= $escape($t('admin.manual_rebuild')) ?></button>
+              </form>
+              <form method="post" action="admin_settings.php" class="search-form">
+                <input type="hidden" name="action" value="rebuild_cover">
+                <input type="hidden" name="active_tab" value="maintenance">
+                <button type="submit" <?= $coverRebuildBusy ? 'disabled' : '' ?>>
+                  <?= $escape($coverRebuildBusy ? $t('admin.rebuild_cover_busy') : $t('admin.rebuild_cover')) ?>
+                </button>
+              </form>
+              <form method="post" action="admin_settings.php" class="search-form">
+                <input type="hidden" name="action" value="admin_clear_opds_cache">
+                <input type="hidden" name="active_tab" value="maintenance">
+                <button type="submit"><?= $escape($t('admin.clear_opds_cache')) ?></button>
+              </form>
+            </div>
           </div>
         </div>
       </section>

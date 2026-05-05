@@ -1,3 +1,13 @@
+FROM golang:1.22-alpine AS books-worker-build
+
+WORKDIR /src/worker
+
+RUN apk add --no-cache gcc musl-dev sqlite-dev
+
+COPY ./worker ./
+RUN go mod tidy \
+    && CGO_ENABLED=1 go build -o /out/books-worker ./cmd/books-worker
+
 FROM php:8.4-fpm-alpine
 
 WORKDIR /var/www/html
@@ -39,8 +49,9 @@ COPY ./site /var/www/html
 COPY ./docker/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY ./docker/nginx/default.conf /etc/nginx/http.d/default.conf
 COPY ./docker/bookslib-entrypoint.sh /usr/local/bin/bookslib-entrypoint
+COPY --from=books-worker-build /out/books-worker /usr/local/bin/books-worker
 
-RUN chmod +x /usr/local/bin/bookslib-entrypoint
+RUN chmod +x /usr/local/bin/bookslib-entrypoint /usr/local/bin/books-worker
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD curl -fsS http://127.0.0.1/index.php >/dev/null || exit 1

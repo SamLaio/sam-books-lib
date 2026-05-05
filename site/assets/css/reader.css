@@ -434,7 +434,7 @@ html[data-theme="dark"] .reader-toc__item {
   .reader-toc,
   .reader-toc__item,
   .reader-viewport {
-    border-width: 5px;
+    border-width: 4px;
   }
 
   .reader-shell {
@@ -451,7 +451,7 @@ html[data-theme="dark"] .reader-toc__item {
   }
 
   .reader-toolbar__title {
-    font-size: clamp(1.05rem, 5vw, 1.65rem);
+    font-size: 1.5em;
     line-height: 1.25;
   }
 

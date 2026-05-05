@@ -64,10 +64,10 @@ $currentLocale = (string) ($currentLocale ?? 'zhTW');
 
     <h2><?= $escape($t('settings.opds_token_heading')) ?></h2>
     <p class="meta"><?= $escape($t('settings.opds_token_hint')) ?></p>
-    <div class="summary">
-      <span><?= $escape($t('common.token')) ?>：<?= $escape($user['api_token'] ?? '') ?></span>
+    <div class="summary opds-token-summary">
+      <span class="opds-token-summary__value"><?= $escape($t('common.token')) ?>：<?= $escape($user['api_token'] ?? '') ?></span>
       <?php if (($opdsTokenUrl ?? '') !== ''): ?>
-        <span><?= $escape($t('common.url')) ?>：<?= $escape($opdsTokenUrl) ?></span>
+        <span class="opds-token-summary__value"><?= $escape($t('common.url')) ?>：<?= $escape($opdsTokenUrl) ?></span>
       <?php endif; ?>
     </div>
     <form method="post" action="settings.php">

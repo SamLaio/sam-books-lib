@@ -5,6 +5,7 @@ namespace Calibre\Controllers;
 use Calibre\Http\View;
 use Calibre\ScanLauncher;
 use Calibre\Services\AuthService;
+use Calibre\Services\OpdsCacheService;
 use Calibre\Services\SmtpMailer;
 use Calibre\Services\ScanScheduleService;
 use Calibre\ScanService;
@@ -84,11 +85,19 @@ final class AdminSettingsController
                     $notice = Lang::t('message.cover_rebuild_queued', [
                         'time' => (string) ($scheduled['run_at'] ?? date('c')),
                     ]);
+                    $activeTab = 'maintenance';
                 } elseif ($action === 'admin_rebuild_index') {
                     $scheduled = $scheduleService->enqueueManual('rebuild');
                     $notice = Lang::t('message.rebuild_queued', [
                         'time' => (string) ($scheduled['run_at'] ?? date('c')),
                     ]);
+                    $activeTab = 'maintenance';
+                } elseif ($action === 'admin_clear_opds_cache') {
+                    $deleted = (new OpdsCacheService($this->appRoot))->clearAll();
+                    $notice = Lang::t('message.opds_cache_cleared', [
+                        'count' => (string) $deleted,
+                    ]);
+                    $activeTab = 'maintenance';
                 } elseif ($action === 'admin_create_user') {
                     if (!$showUserManagement) {
                         throw new \RuntimeException(Lang::t('error.user_management_disabled'));

@@ -42,7 +42,10 @@ final class OpdsUrlGenerator
 
     public function searchTemplate(): string
     {
-        return $this->feed('search') . '&query={searchTerms}';
+        $searchFeedUrl = $this->feed('search');
+        $separator = str_contains($searchFeedUrl, '?') ? '&' : '?';
+
+        return $searchFeedUrl . $separator . 'query={searchTerms}';
     }
 
     public function asset(string $path): string

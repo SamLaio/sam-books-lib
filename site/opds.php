@@ -95,6 +95,7 @@ if ($authService->isEnabled() && $token !== null) {
     $tokenUser = $authService->findUserByToken($token);
     if (is_array($tokenUser)) {
         $isTokenAuthenticated = true;
+        $_SERVER['OPDS_AUTH_USER_ID'] = (string) ((int) ($tokenUser['id'] ?? 0));
         $_SERVER['OPDS_BASE_PATH'] = '/opds/' . rawurlencode($token);
         logOpdsAuthEvent('token-auth ok uri=' . ((string) ($_SERVER['REQUEST_URI'] ?? '')) . ' user=' . ((string) ($tokenUser['username'] ?? '')));
     }

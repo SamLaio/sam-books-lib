@@ -291,6 +291,24 @@ final class AuthService
         return is_array($row) ? $row : null;
     }
 
+    public function getUserById(int $userId): ?array
+    {
+        if ($userId < 1) {
+            return null;
+        }
+
+        $stmt = $this->getPdo()->prepare(
+            'SELECT id, username, email, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
+             FROM users
+             WHERE id = :id AND is_enabled = 1
+             LIMIT 1'
+        );
+        $stmt->execute([':id' => $userId]);
+        $row = $stmt->fetch(\PDO::FETCH_ASSOC);
+
+        return is_array($row) ? $row : null;
+    }
+
     public function isCurrentUserAdmin(): bool
     {
         $user = $this->getCurrentUser();
@@ -1169,7 +1187,7 @@ final class AuthService
         }
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, api_token, role, is_enabled
+            'SELECT id, username, api_token, role, is_enabled, hidden_authors, hidden_tags
              FROM users
              WHERE api_token = :api_token AND is_enabled = 1
              LIMIT 1'

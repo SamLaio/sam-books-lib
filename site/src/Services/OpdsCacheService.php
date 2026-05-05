@@ -4,6 +4,8 @@ namespace Calibre\Services;
 
 final class OpdsCacheService
 {
+    private const MAX_CACHE_BYTES = 10 * 1024 * 1024;
+
     private string $cacheDir;
 
     public function __construct(string $appRoot)
@@ -36,35 +38,120 @@ final class OpdsCacheService
             return;
         }
 
-        if (!is_dir($this->cacheDir) && !mkdir($this->cacheDir, 0755, true) && !is_dir($this->cacheDir)) {
+        if (!is_dir($this->cacheDir) && !mkdir($this->cacheDir, 0777, true) && !is_dir($this->cacheDir)) {
             return;
         }
+        @chmod($this->cacheDir, 0777);
 
         $path = $this->cachePath($server, $query);
+        $this->pruneForIncomingFile($path, strlen($xml));
         @file_put_contents($path, $xml, LOCK_EX);
+        if (is_file($path)) {
+            @chmod($path, 0666);
+        }
     }
 
-    public function clearAll(): void
+    public function clearAll(): int
     {
         if (!is_dir($this->cacheDir)) {
-            return;
+            return 0;
         }
 
         $entries = @scandir($this->cacheDir);
         if (!is_array($entries)) {
-            return;
+            return 0;
         }
 
+        $deleted = 0;
         foreach ($entries as $entry) {
             if ($entry === '.' || $entry === '..') {
                 continue;
             }
 
             $fullPath = $this->cacheDir . DIRECTORY_SEPARATOR . $entry;
-            if (is_file($fullPath)) {
-                @unlink($fullPath);
+            if (is_file($fullPath) && @unlink($fullPath)) {
+                $deleted++;
             }
         }
+
+        return $deleted;
+    }
+
+    private function pruneForIncomingFile(string $incomingPath, int $incomingBytes): void
+    {
+        $files = $this->listCacheFiles();
+        if ($files === []) {
+            return;
+        }
+
+        $totalBytes = 0;
+        foreach ($files as $file) {
+            if ($file['path'] === $incomingPath) {
+                continue;
+            }
+
+            $totalBytes += $file['size'];
+        }
+
+        if ($totalBytes + $incomingBytes <= self::MAX_CACHE_BYTES) {
+            return;
+        }
+
+        usort($files, static function (array $a, array $b): int {
+            if ($a['mtime'] === $b['mtime']) {
+                return strcmp($a['path'], $b['path']);
+            }
+
+            return $a['mtime'] <=> $b['mtime'];
+        });
+
+        foreach ($files as $file) {
+            if ($file['path'] === $incomingPath) {
+                continue;
+            }
+
+            if (@unlink($file['path'])) {
+                $totalBytes -= $file['size'];
+            }
+
+            if ($totalBytes + $incomingBytes <= self::MAX_CACHE_BYTES) {
+                return;
+            }
+        }
+    }
+
+    private function listCacheFiles(): array
+    {
+        if (!is_dir($this->cacheDir)) {
+            return [];
+        }
+
+        $entries = @scandir($this->cacheDir);
+        if (!is_array($entries)) {
+            return [];
+        }
+
+        $files = [];
+        foreach ($entries as $entry) {
+            if ($entry === '.' || $entry === '..') {
+                continue;
+            }
+
+            $path = $this->cacheDir . DIRECTORY_SEPARATOR . $entry;
+            if (!is_file($path)) {
+                continue;
+            }
+
+            $size = @filesize($path);
+            $mtime = @filemtime($path);
+            $files[] = [
+                'path' => $path,
+                'size' => is_int($size) ? max(0, $size) : 0,
+                'mtime' => is_int($mtime) ? $mtime : 0,
+            ];
+        }
+
+        return $files;
     }
 
     private function cachePath(array $server, array $query): string
@@ -80,6 +167,7 @@ final class OpdsCacheService
         $payload = [
             'accept' => $accept,
             'query' => $normalizedQuery,
+            'visibility' => trim((string) ($server['OPDS_VISIBILITY_KEY'] ?? 'public')),
         ];
 
         return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');

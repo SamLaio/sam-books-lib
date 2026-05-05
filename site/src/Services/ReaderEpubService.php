@@ -69,18 +69,22 @@ final class ReaderEpubService
         }
 
         try {
-            $content = $zip->getFromName($normalizedAssetPath);
+            $zipPath = $this->resolveExistingZipPath($zip, $normalizedAssetPath);
+            $content = $zipPath !== null ? $zip->getFromName($zipPath) : false;
             if (!is_string($content)) {
                 throw new HttpException(404, Lang::t('error.reader_asset_not_found'));
             }
 
-            $mimeType = (string) ($inspection['manifest_by_path'][$normalizedAssetPath]['media_type'] ?? '');
+            $resolvedManifestPath = $this->normalizeZipPath($zipPath ?? $normalizedAssetPath);
+            $mimeType = (string) ($inspection['manifest_by_path'][$resolvedManifestPath]['media_type']
+                ?? $inspection['manifest_by_path'][$normalizedAssetPath]['media_type']
+                ?? '');
             if ($mimeType === '') {
-                $mimeType = $this->detectMimeTypeFromPath($normalizedAssetPath);
+                $mimeType = $this->detectMimeTypeFromPath($resolvedManifestPath);
             }
 
             if (str_starts_with(strtolower($mimeType), 'text/css')) {
-                $content = $this->sanitizeStylesheetContent($content, $inspection, $normalizedAssetPath, $bookId);
+                $content = $this->sanitizeStylesheetContent($content, $inspection, $resolvedManifestPath, $bookId);
             }
 
             return [
@@ -501,18 +505,27 @@ final class ReaderEpubService
                     continue;
                 }
 
-                $originalValue = trim($element->getAttribute($attributeName));
-                if ($this->isExternalResource($originalValue)) {
+                $this->rewriteAssetAttribute($element, $attributeName, $bookId, (string) $section['zip_path']);
+            }
+
+            foreach (['data-src', 'data-original', 'data-lazy-src'] as $attributeName) {
+                if (!$element->hasAttribute($attributeName)) {
                     continue;
                 }
 
-                [$assetPath] = $this->splitHrefFragment($originalValue);
-                if ($assetPath === '') {
-                    continue;
-                }
+                $this->rewriteAssetAttribute($element, $attributeName, $bookId, (string) $section['zip_path']);
+            }
 
-                $resolvedPath = $this->resolveZipRelative($this->directoryOfZipPath((string) $section['zip_path']), $assetPath);
-                $element->setAttribute($attributeName, $this->buildReaderAssetUrl($bookId, $resolvedPath));
+            if ($element->hasAttribute('srcset')) {
+                $this->rewriteSrcsetAttribute($element, 'srcset', $bookId, (string) $section['zip_path']);
+            }
+
+            if ($element->hasAttribute('data-srcset')) {
+                $this->rewriteSrcsetAttribute($element, 'data-srcset', $bookId, (string) $section['zip_path']);
+            }
+
+            if ($element->hasAttribute('xlink:href')) {
+                $this->rewriteAssetAttribute($element, 'xlink:href', $bookId, (string) $section['zip_path']);
             }
 
             if (!$element->hasAttribute('href')) {
@@ -547,6 +560,60 @@ final class ReaderEpubService
             }
 
             $element->setAttribute('href', $this->buildReaderAssetUrl($bookId, $resolvedPath));
+        }
+    }
+
+    private function rewriteAssetAttribute(\DOMElement $element, string $attributeName, int $bookId, string $sectionZipPath): void
+    {
+        $originalValue = trim($element->getAttribute($attributeName));
+        if ($this->isExternalResource($originalValue) || str_starts_with($originalValue, '#')) {
+            return;
+        }
+
+        [$assetPath] = $this->splitHrefFragment($originalValue);
+        if ($assetPath === '') {
+            return;
+        }
+
+        $resolvedPath = $this->resolveZipRelative($this->directoryOfZipPath($sectionZipPath), $assetPath);
+        $element->setAttribute($attributeName, $this->buildReaderAssetUrl($bookId, $resolvedPath));
+    }
+
+    private function rewriteSrcsetAttribute(\DOMElement $element, string $attributeName, int $bookId, string $sectionZipPath): void
+    {
+        $srcset = trim($element->getAttribute($attributeName));
+        if ($srcset === '') {
+            return;
+        }
+
+        $candidates = [];
+        foreach (explode(',', $srcset) as $candidate) {
+            $candidate = trim($candidate);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $parts = preg_split('/\s+/', $candidate, 2) ?: [];
+            $source = trim((string) ($parts[0] ?? ''));
+            $descriptor = trim((string) ($parts[1] ?? ''));
+            if ($source === '' || $this->isExternalResource($source) || str_starts_with($source, '#')) {
+                $candidates[] = $candidate;
+                continue;
+            }
+
+            [$assetPath] = $this->splitHrefFragment($source);
+            if ($assetPath === '') {
+                $candidates[] = $candidate;
+                continue;
+            }
+
+            $resolvedPath = $this->resolveZipRelative($this->directoryOfZipPath($sectionZipPath), $assetPath);
+            $rewritten = $this->buildReaderAssetUrl($bookId, $resolvedPath);
+            $candidates[] = $descriptor !== '' ? $rewritten . ' ' . $descriptor : $rewritten;
+        }
+
+        if ($candidates !== []) {
+            $element->setAttribute($attributeName, implode(', ', $candidates));
         }
     }
 
@@ -664,9 +731,14 @@ final class ReaderEpubService
     private function splitHrefFragment(string $href): array
     {
         $parts = explode('#', $href, 2);
+        $path = trim($parts[0] ?? '');
+        $queryOffset = strpos($path, '?');
+        if ($queryOffset !== false) {
+            $path = substr($path, 0, $queryOffset);
+        }
 
         return [
-            trim($parts[0] ?? ''),
+            trim($path),
             trim($parts[1] ?? ''),
         ];
     }
@@ -689,7 +761,7 @@ final class ReaderEpubService
 
     private function normalizeZipPath(string $path): string
     {
-        $normalized = str_replace('\\', '/', trim($path));
+        $normalized = str_replace('\\', '/', rawurldecode(trim($path)));
         $parts = [];
         foreach (explode('/', $normalized) as $part) {
             if ($part === '' || $part === '.') {
@@ -705,6 +777,38 @@ final class ReaderEpubService
         }
 
         return implode('/', $parts);
+    }
+
+    private function resolveExistingZipPath(\ZipArchive $zip, string $normalizedPath): ?string
+    {
+        if ($normalizedPath === '') {
+            return null;
+        }
+
+        if ($zip->locateName($normalizedPath) !== false) {
+            return $normalizedPath;
+        }
+
+        $caseInsensitiveMatch = null;
+        $targetLower = strtolower($normalizedPath);
+        for ($index = 0; $index < $zip->numFiles; $index++) {
+            $stat = $zip->statIndex($index);
+            $candidate = is_array($stat) ? (string) ($stat['name'] ?? '') : '';
+            if ($candidate === '') {
+                continue;
+            }
+
+            $candidateNormalized = $this->normalizeZipPath($candidate);
+            if ($candidateNormalized === $normalizedPath) {
+                return $candidate;
+            }
+
+            if ($caseInsensitiveMatch === null && strtolower($candidateNormalized) === $targetLower) {
+                $caseInsensitiveMatch = $candidate;
+            }
+        }
+
+        return $caseInsensitiveMatch;
     }
 
     private function isExternalResource(string $value): bool
@@ -757,7 +861,7 @@ final class ReaderEpubService
         $sanitized = $this->stripFontRules($css);
         $baseDir = $this->directoryOfZipPath($stylesheetPath);
 
-        return (string) preg_replace_callback('/url\(([^)]+)\)/i', function (array $matches) use ($inspection, $baseDir): string {
+        return (string) preg_replace_callback('/url\(([^)]+)\)/i', function (array $matches) use ($inspection, $baseDir, $bookId): string {
             $raw = trim((string) ($matches[1] ?? ''));
             $raw = trim($raw, "\"' \t\r\n");
             if ($raw === '' || $this->isExternalResource($raw) || str_starts_with($raw, '#')) {

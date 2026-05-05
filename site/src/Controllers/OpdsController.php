@@ -6,6 +6,8 @@ use Calibre\Http\HttpException;
 use Calibre\Services\OpdsAssetService;
 use Calibre\Services\OpdsCacheService;
 use Calibre\Services\OpdsService;
+use Calibre\Services\AuthService;
+use Calibre\Support\CatalogRequest;
 use Calibre\Support\Lang;
 
 final class OpdsController
@@ -14,17 +16,20 @@ final class OpdsController
     private OpdsService $opdsService;
     private OpdsAssetService $assetService;
     private OpdsCacheService $cacheService;
+    private AuthService $authService;
 
     public function __construct(
         string $appRoot,
         ?OpdsService $opdsService = null,
         ?OpdsAssetService $assetService = null,
-        ?OpdsCacheService $cacheService = null
+        ?OpdsCacheService $cacheService = null,
+        ?AuthService $authService = null
     ) {
         $this->appRoot = rtrim($appRoot, DIRECTORY_SEPARATOR);
         $this->opdsService = $opdsService ?? new OpdsService($appRoot);
         $this->assetService = $assetService ?? new OpdsAssetService($appRoot);
         $this->cacheService = $cacheService ?? new OpdsCacheService($appRoot);
+        $this->authService = $authService ?? new AuthService($appRoot);
     }
 
     public function handle(array $server, array $query): void
@@ -35,6 +40,9 @@ final class OpdsController
         }
 
         $feed = strtolower(trim((string) ($query['feed'] ?? 'index')));
+        $query = $this->normalizeCatalogQuery($feed, $query);
+        $visibility = $this->resolveUserVisibility($server);
+        $server['OPDS_VISIBILITY_KEY'] = $visibility['key'];
 
         try {
             if ($feed === 'osd') {
@@ -47,12 +55,14 @@ final class OpdsController
 
             if ($feed === 'cover') {
                 $bookId = $this->readBookId($query);
+                $this->assertBookVisible($bookId, $visibility);
                 $cover = $this->assetService->resolveCoverByBookId($bookId);
                 $this->streamBinaryResponse($cover, $requestMethod, false);
             }
 
             if ($feed === 'download') {
                 $bookId = $this->readBookId($query);
+                $this->assertBookVisible($bookId, $visibility);
                 $format = trim((string) ($query['format'] ?? ''));
                 $download = $this->assetService->resolveDownloadByBookId($bookId, $format === '' ? null : $format);
                 $this->streamBinaryResponse($download, $requestMethod, true);
@@ -64,7 +74,7 @@ final class OpdsController
                 $this->emitXmlResponse($contentType, $cachedXml, $requestMethod);
             }
 
-            $xml = $this->opdsService->renderCatalog($server, $query);
+            $xml = $this->opdsService->renderCatalog($server, $query, $visibility);
             $this->cacheService->write($server, $query, $xml);
             $this->emitXmlResponse($contentType, $xml, $requestMethod);
         } catch (HttpException $e) {
@@ -85,6 +95,76 @@ final class OpdsController
         }
 
         return (int) $bookId;
+    }
+
+    private function normalizeCatalogQuery(string $feed, array $query): array
+    {
+        if ($feed !== 'search') {
+            return $query;
+        }
+
+        $search = null;
+        foreach (['query', 'q', 'searchTerms', 'term'] as $key) {
+            if (!isset($query[$key]) || !is_scalar($query[$key])) {
+                continue;
+            }
+
+            $candidate = trim((string) $query[$key]);
+            if ($candidate === '') {
+                continue;
+            }
+
+            $search = $candidate;
+            break;
+        }
+
+        foreach (['q', 'searchTerms', 'term'] as $alias) {
+            unset($query[$alias]);
+        }
+
+        if ($search !== null) {
+            $query['query'] = CatalogRequest::normalizeQuery($search);
+        }
+
+        return $query;
+    }
+
+    private function assertBookVisible(int $bookId, array $visibility): void
+    {
+        if (!$this->opdsService->isBookVisible($bookId, $visibility)) {
+            throw new HttpException(404, Lang::t('error.book_not_found'));
+        }
+    }
+
+    /**
+     * @return array{hidden_authors:array<int,string>,hidden_tags:array<int,string>,key:string}
+     */
+    private function resolveUserVisibility(array $server): array
+    {
+        $user = null;
+        $userId = filter_var($server['OPDS_AUTH_USER_ID'] ?? null, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+
+        if ($userId !== false && $userId !== null) {
+            $user = $this->authService->getUserById((int) $userId);
+        } else {
+            $user = $this->authService->getCurrentUser();
+        }
+
+        $hiddenAuthors = $this->authService->getUserHiddenAuthors($user);
+        $hiddenTags = $this->authService->getUserHiddenTags($user);
+        $payload = [
+            'user_id' => is_array($user) ? (int) ($user['id'] ?? 0) : 0,
+            'hidden_authors' => $hiddenAuthors,
+            'hidden_tags' => $hiddenTags,
+        ];
+
+        return [
+            'hidden_authors' => $hiddenAuthors,
+            'hidden_tags' => $hiddenTags,
+            'key' => hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: ''),
+        ];
     }
 
     private function emitXmlResponse(string $contentType, string $body, string $requestMethod): void

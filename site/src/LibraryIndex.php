@@ -418,9 +418,21 @@ class LibraryIndex
         return (int) $stmt->fetchColumn();
     }
 
-    public function countBooks(): int
+    public function countBooks(array $hiddenAuthors = [], array $hiddenTags = []): int
     {
-        return (int) $this->pdo->query('SELECT COUNT(*) FROM books')->fetchColumn();
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        if ($visibilityFilter === null) {
+            return (int) $this->pdo->query('SELECT COUNT(*) FROM books')->fetchColumn();
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*)
+             FROM books
+             WHERE ' . $visibilityFilter['sql']
+        );
+        $stmt->execute($visibilityFilter['params']);
+
+        return (int) $stmt->fetchColumn();
     }
 
     public function getBookById(int $id): ?array
@@ -436,6 +448,33 @@ class LibraryIndex
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
 
         return $row === false ? null : $row;
+    }
+
+    public function isBookVisible(int $id, array $hiddenAuthors = [], array $hiddenTags = []): bool
+    {
+        if ($id < 1) {
+            return false;
+        }
+
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $whereSql = 'id = :id';
+        if ($visibilityFilter !== null) {
+            $whereSql .= ' AND ' . $visibilityFilter['sql'];
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT 1
+             FROM books
+             WHERE ' . $whereSql . '
+             LIMIT 1'
+        );
+        $stmt->bindValue(':id', $id, \PDO::PARAM_INT);
+        foreach (($visibilityFilter['params'] ?? []) as $name => $value) {
+            $stmt->bindValue($name, $value, \PDO::PARAM_STR);
+        }
+        $stmt->execute();
+
+        return $stmt->fetchColumn() !== false;
     }
 
     public function iterateCoverRegenerationCandidates(): \Generator
@@ -580,17 +619,26 @@ class LibraryIndex
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
-    public function getRecentBooksPage(int $limit, int $offset): array
+    public function getRecentBooksPage(int $limit, int $offset, array $hiddenAuthors = [], array $hiddenTags = []): array
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
 
-        $stmt = $this->pdo->prepare(
-            'SELECT ' . $this->getBookListColumns() . '
-             FROM books
+        $sql = 'SELECT ' . $this->getBookListColumns() . '
+             FROM books';
+        if ($visibilityFilter !== null) {
+            $sql .= '
+             WHERE ' . $visibilityFilter['sql'];
+        }
+        $sql .= '
              ORDER BY COALESCE(NULLIF(library_timestamp, \'\'), created_at) DESC, id DESC
-             LIMIT :limit OFFSET :offset'
-        );
+             LIMIT :limit OFFSET :offset';
+
+        $stmt = $this->pdo->prepare($sql);
+        foreach (($visibilityFilter['params'] ?? []) as $name => $paramValue) {
+            $stmt->bindValue($name, $paramValue, \PDO::PARAM_STR);
+        }
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
         $stmt->execute();
@@ -598,7 +646,7 @@ class LibraryIndex
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
-    public function iterateFacetValues(string $facet): \Generator
+    public function iterateFacetValues(string $facet, array $hiddenAuthors = [], array $hiddenTags = []): \Generator
     {
         $column = match ($facet) {
             'author' => 'author',
@@ -606,34 +654,59 @@ class LibraryIndex
             'series' => 'series',
             default => throw new \InvalidArgumentException('Unsupported facet: ' . $facet),
         };
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
 
-        $stmt = $this->pdo->query('SELECT ' . $column . ' FROM books');
+        $sql = 'SELECT ' . $column . ' FROM books';
+        if ($visibilityFilter !== null) {
+            $sql .= ' WHERE ' . $visibilityFilter['sql'];
+        }
+
+        $stmt = $visibilityFilter === null
+            ? $this->pdo->query($sql)
+            : $this->pdo->prepare($sql);
+        if ($stmt instanceof \PDOStatement && $visibilityFilter !== null) {
+            $stmt->execute($visibilityFilter['params']);
+        }
         while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             yield (string) ($row[$column] ?? '');
         }
     }
 
-    public function countReadStatus(bool $isRead): int
+    public function countReadStatus(bool $isRead, array $hiddenAuthors = [], array $hiddenTags = []): int
     {
-        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE is_read = :is_read');
-        $stmt->execute([':is_read' => $isRead ? 1 : 0]);
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $whereSql = 'is_read = :is_read';
+        if ($visibilityFilter !== null) {
+            $whereSql .= ' AND ' . $visibilityFilter['sql'];
+        }
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE ' . $whereSql);
+        $stmt->execute(array_merge([':is_read' => $isRead ? 1 : 0], $visibilityFilter['params'] ?? []));
 
         return (int) $stmt->fetchColumn();
     }
 
-    public function getReadStatusBooksPage(bool $isRead, int $limit, int $offset): array
+    public function getReadStatusBooksPage(bool $isRead, int $limit, int $offset, array $hiddenAuthors = [], array $hiddenTags = []): array
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $whereSql = 'is_read = :is_read';
+        if ($visibilityFilter !== null) {
+            $whereSql .= ' AND ' . $visibilityFilter['sql'];
+        }
 
         $stmt = $this->pdo->prepare(
             'SELECT ' . $this->getBookListColumns() . '
              FROM books
-             WHERE is_read = :is_read
+             WHERE ' . $whereSql . '
              ORDER BY title COLLATE NOCASE ASC, id ASC
              LIMIT :limit OFFSET :offset'
         );
         $stmt->bindValue(':is_read', $isRead ? 1 : 0, \PDO::PARAM_INT);
+        foreach (($visibilityFilter['params'] ?? []) as $name => $paramValue) {
+            $stmt->bindValue($name, $paramValue, \PDO::PARAM_STR);
+        }
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
         $stmt->execute();
@@ -641,29 +714,40 @@ class LibraryIndex
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
-    public function countFacetBooks(string $facet, string $value): int
+    public function countFacetBooks(string $facet, string $value, array $hiddenAuthors = [], array $hiddenTags = []): int
     {
         $facetFilter = $this->buildFacetFilter($facet, $value);
-        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE ' . $facetFilter['sql']);
-        $stmt->execute($facetFilter['params']);
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $whereSql = $facetFilter['sql'];
+        if ($visibilityFilter !== null) {
+            $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
+        }
+
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM books WHERE ' . $whereSql);
+        $stmt->execute(array_merge($facetFilter['params'], $visibilityFilter['params'] ?? []));
 
         return (int) $stmt->fetchColumn();
     }
 
-    public function getFacetBooksPage(string $facet, string $value, int $limit, int $offset): array
+    public function getFacetBooksPage(string $facet, string $value, int $limit, int $offset, array $hiddenAuthors = [], array $hiddenTags = []): array
     {
         $limit = max(1, $limit);
         $offset = max(0, $offset);
         $facetFilter = $this->buildFacetFilter($facet, $value);
+        $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $whereSql = $facetFilter['sql'];
+        if ($visibilityFilter !== null) {
+            $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
+        }
 
         $stmt = $this->pdo->prepare(
             'SELECT ' . $this->getBookListColumns() . '
              FROM books
-             WHERE ' . $facetFilter['sql'] . '
+             WHERE ' . $whereSql . '
              ORDER BY title COLLATE NOCASE ASC, id ASC
              LIMIT :limit OFFSET :offset'
         );
-        foreach ($facetFilter['params'] as $name => $paramValue) {
+        foreach (array_merge($facetFilter['params'], $visibilityFilter['params'] ?? []) as $name => $paramValue) {
             $stmt->bindValue($name, $paramValue, \PDO::PARAM_STR);
         }
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
@@ -1145,7 +1229,10 @@ class LibraryIndex
     private function buildFieldMatchClause(string $placeholder): string
     {
         return '(title LIKE ' . $placeholder . ' COLLATE NOCASE'
-            . ' OR author LIKE ' . $placeholder . ' COLLATE NOCASE)';
+            . ' OR author LIKE ' . $placeholder . ' COLLATE NOCASE'
+            . ' OR tag LIKE ' . $placeholder . ' COLLATE NOCASE'
+            . ' OR series LIKE ' . $placeholder . ' COLLATE NOCASE'
+            . ' OR isbn LIKE ' . $placeholder . ' COLLATE NOCASE)';
     }
 
     private function buildVisibilityFilter(array $hiddenAuthors, array $hiddenTags): ?array

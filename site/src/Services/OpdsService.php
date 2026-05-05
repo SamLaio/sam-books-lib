@@ -41,25 +41,27 @@ final class OpdsService
         $this->assetService = $assetService ?? new OpdsAssetService($this->appRoot, $scanService);
     }
 
-    public function renderCatalog(array $server, array $query): string
+    public function renderCatalog(array $server, array $query, array $visibility = []): string
     {
         $feedName = strtolower(trim((string) ($query['feed'] ?? 'index')));
         $offset = $this->normalizeOffset($query['offset'] ?? 0);
         $urls = new OpdsUrlGenerator($server, $this->siteBaseUrl);
+        $hiddenAuthors = $this->normalizeVisibilityList($visibility['hidden_authors'] ?? []);
+        $hiddenTags = $this->normalizeVisibilityList($visibility['hidden_tags'] ?? []);
 
         return match ($feedName) {
-            '', 'index' => $this->renderRootFeed($urls),
-            'books' => $this->renderAlphabeticalBooksFeed($offset, $urls),
-            'new' => $this->renderNewBooksFeed($offset, $urls),
-            'authors' => $this->renderFacetNavigationFeed('Authors', 'author', 'author', $offset, $urls),
-            'author' => $this->renderFacetBooksFeed('Author', 'author', $this->requireValue($query, 'value'), $offset, $urls),
-            'tags' => $this->renderFacetNavigationFeed('Category list', 'tag', 'tag', $offset, $urls),
-            'tag' => $this->renderFacetBooksFeed('Category', 'tag', $this->requireValue($query, 'value'), $offset, $urls),
-            'series' => $this->renderFacetNavigationFeed('Series list', 'series', 'series_books', $offset, $urls),
-            'series_books' => $this->renderFacetBooksFeed('Series', 'series', $this->requireValue($query, 'value'), $offset, $urls),
-            'read' => $this->renderReadStatusFeed(true, $offset, $urls),
-            'unread' => $this->renderReadStatusFeed(false, $offset, $urls),
-            'search' => $this->renderSearchFeed(trim((string) ($query['query'] ?? '')), $offset, $urls),
+            '', 'index' => $this->renderRootFeed($urls, $hiddenAuthors, $hiddenTags),
+            'books' => $this->renderAlphabeticalBooksFeed($offset, $urls, $hiddenAuthors, $hiddenTags),
+            'new' => $this->renderNewBooksFeed($offset, $urls, $hiddenAuthors, $hiddenTags),
+            'authors' => $this->renderFacetNavigationFeed('Authors', 'author', 'author', $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'author' => $this->renderFacetBooksFeed('Author', 'author', $this->requireValue($query, 'value'), $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'tags' => $this->renderFacetNavigationFeed('Category list', 'tag', 'tag', $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'tag' => $this->renderFacetBooksFeed('Category', 'tag', $this->requireValue($query, 'value'), $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'series' => $this->renderFacetNavigationFeed('Series list', 'series', 'series_books', $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'series_books' => $this->renderFacetBooksFeed('Series', 'series', $this->requireValue($query, 'value'), $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'read' => $this->renderReadStatusFeed(true, $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'unread' => $this->renderReadStatusFeed(false, $offset, $urls, $hiddenAuthors, $hiddenTags),
+            'search' => $this->renderSearchFeed(trim((string) ($query['query'] ?? '')), $offset, $urls, $hiddenAuthors, $hiddenTags),
             default => throw new HttpException(404, 'OPDS feed not found.'),
         };
     }
@@ -202,6 +204,14 @@ final class OpdsService
         return $this->feedType($kind) . '; charset=UTF-8';
     }
 
+    public function isBookVisible(int $bookId, array $visibility = []): bool
+    {
+        $hiddenAuthors = $this->normalizeVisibilityList($visibility['hidden_authors'] ?? []);
+        $hiddenTags = $this->normalizeVisibilityList($visibility['hidden_tags'] ?? []);
+
+        return $this->index->isBookVisible($bookId, $hiddenAuthors, $hiddenTags);
+    }
+
     public function renderSearchDescription(array $server): string
     {
         $urls = new OpdsUrlGenerator($server, $this->siteBaseUrl);
@@ -224,7 +234,7 @@ final class OpdsService
         return $dom->saveXML() ?: '';
     }
 
-    private function renderRootFeed(OpdsUrlGenerator $urls): string
+    private function renderRootFeed(OpdsUrlGenerator $urls, array $hiddenAuthors = [], array $hiddenTags = []): string
     {
         $dom = $this->createFeedDocument(
             $this->siteTitle,
@@ -239,11 +249,11 @@ final class OpdsService
             throw new \RuntimeException('Failed to create OPDS root feed.');
         }
 
-        $bookCount = $this->index->countBooks();
-        $authorCount = count($this->buildFacetIndex('author'));
-        $tagCount = count($this->buildFacetIndex('tag'));
-        $seriesCount = count($this->buildFacetIndex('series'));
-        $readCount = $this->index->countReadStatus(true);
+        $bookCount = $this->index->countBooks($hiddenAuthors, $hiddenTags);
+        $authorCount = count($this->buildFacetIndex('author', $hiddenAuthors, $hiddenTags));
+        $tagCount = count($this->buildFacetIndex('tag', $hiddenAuthors, $hiddenTags));
+        $seriesCount = count($this->buildFacetIndex('series', $hiddenAuthors, $hiddenTags));
+        $readCount = $this->index->countReadStatus(true, $hiddenAuthors, $hiddenTags);
         $unreadCount = max(0, $bookCount - $readCount);
 
         $entries = [
@@ -325,9 +335,9 @@ final class OpdsService
         return $dom->saveXML() ?: '';
     }
 
-    private function renderAlphabeticalBooksFeed(int $offset, OpdsUrlGenerator $urls): string
+    private function renderAlphabeticalBooksFeed(int $offset, OpdsUrlGenerator $urls, array $hiddenAuthors = [], array $hiddenTags = []): string
     {
-        $rows = $this->index->getBooksPage('', $this->pageSize, $offset, 'title', 'asc');
+        $rows = $this->index->getBooksPage('', $this->pageSize, $offset, 'title', 'asc', $hiddenAuthors, $hiddenTags);
         $books = $this->hydrateBooks($rows);
 
         return $this->renderBookFeed(
@@ -335,15 +345,15 @@ final class OpdsService
             'books',
             [],
             $books,
-            $this->index->countBooks(),
+            $this->index->countBooks($hiddenAuthors, $hiddenTags),
             $offset,
             $urls
         );
     }
 
-    private function renderNewBooksFeed(int $offset, OpdsUrlGenerator $urls): string
+    private function renderNewBooksFeed(int $offset, OpdsUrlGenerator $urls, array $hiddenAuthors = [], array $hiddenTags = []): string
     {
-        $rows = $this->index->getRecentBooksPage($this->pageSize, $offset);
+        $rows = $this->index->getRecentBooksPage($this->pageSize, $offset, $hiddenAuthors, $hiddenTags);
         $books = $this->hydrateBooks($rows);
 
         return $this->renderBookFeed(
@@ -351,7 +361,7 @@ final class OpdsService
             'new',
             [],
             $books,
-            $this->index->countBooks(),
+            $this->index->countBooks($hiddenAuthors, $hiddenTags),
             $offset,
             $urls
         );
@@ -362,9 +372,11 @@ final class OpdsService
         string $facet,
         string $targetFeed,
         int $offset,
-        OpdsUrlGenerator $urls
+        OpdsUrlGenerator $urls,
+        array $hiddenAuthors = [],
+        array $hiddenTags = []
     ): string {
-        $values = $this->buildFacetIndex($facet);
+        $values = $this->buildFacetIndex($facet, $hiddenAuthors, $hiddenTags);
         $slice = array_slice($values, $offset, $this->pageSize);
         $feedName = match ($facet) {
             'author' => 'authors',
@@ -415,9 +427,11 @@ final class OpdsService
         string $facet,
         string $value,
         int $offset,
-        OpdsUrlGenerator $urls
+        OpdsUrlGenerator $urls,
+        array $hiddenAuthors = [],
+        array $hiddenTags = []
     ): string {
-        $rows = $this->index->getFacetBooksPage($facet, $value, $this->pageSize, $offset);
+        $rows = $this->index->getFacetBooksPage($facet, $value, $this->pageSize, $offset, $hiddenAuthors, $hiddenTags);
         $books = $this->hydrateBooks($rows);
 
         $feedName = match ($facet) {
@@ -432,15 +446,15 @@ final class OpdsService
             $feedName,
             ['value' => $value],
             $books,
-            $this->index->countFacetBooks($facet, $value),
+            $this->index->countFacetBooks($facet, $value, $hiddenAuthors, $hiddenTags),
             $offset,
             $urls
         );
     }
 
-    private function renderReadStatusFeed(bool $isRead, int $offset, OpdsUrlGenerator $urls): string
+    private function renderReadStatusFeed(bool $isRead, int $offset, OpdsUrlGenerator $urls, array $hiddenAuthors = [], array $hiddenTags = []): string
     {
-        $rows = $this->index->getReadStatusBooksPage($isRead, $this->pageSize, $offset);
+        $rows = $this->index->getReadStatusBooksPage($isRead, $this->pageSize, $offset, $hiddenAuthors, $hiddenTags);
         $books = $this->hydrateBooks($rows);
         $feedName = $isRead ? 'read' : 'unread';
 
@@ -449,19 +463,19 @@ final class OpdsService
             $feedName,
             [],
             $books,
-            $this->index->countReadStatus($isRead),
+            $this->index->countReadStatus($isRead, $hiddenAuthors, $hiddenTags),
             $offset,
             $urls
         );
     }
 
-    private function renderSearchFeed(string $query, int $offset, OpdsUrlGenerator $urls): string
+    private function renderSearchFeed(string $query, int $offset, OpdsUrlGenerator $urls, array $hiddenAuthors = [], array $hiddenTags = []): string
     {
         if ($query === '') {
             return $this->renderBookFeed('Search', 'search', ['query' => ''], [], 0, 0, $urls);
         }
 
-        $rows = $this->index->getBooksPage($query, $this->pageSize, $offset, 'title', 'asc');
+        $rows = $this->index->getBooksPage($query, $this->pageSize, $offset, 'title', 'asc', $hiddenAuthors, $hiddenTags);
         $books = $this->hydrateBooks($rows);
 
         return $this->renderBookFeed(
@@ -469,7 +483,7 @@ final class OpdsService
             'search',
             ['query' => $query],
             $books,
-            $this->index->countSearchResults($query),
+            $this->index->countSearchResults($query, $hiddenAuthors, $hiddenTags),
             $offset,
             $urls
         );
@@ -763,11 +777,11 @@ final class OpdsService
         }
     }
 
-    private function buildFacetIndex(string $facet): array
+    private function buildFacetIndex(string $facet, array $hiddenAuthors = [], array $hiddenTags = []): array
     {
         $values = [];
 
-        foreach ($this->index->iterateFacetValues($facet) as $rawValue) {
+        foreach ($this->index->iterateFacetValues($facet, $hiddenAuthors, $hiddenTags) as $rawValue) {
             $parts = match ($facet) {
                 'author' => $this->splitCsv($rawValue),
                 'tag' => $this->splitCsv($rawValue),
@@ -793,6 +807,19 @@ final class OpdsService
         });
 
         return array_values($values);
+    }
+
+    private function normalizeVisibilityList($values): array
+    {
+        if (!is_array($values)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(static function ($value): string {
+            return is_scalar($value) ? trim((string) $value) : '';
+        }, $values), static function (string $value): bool {
+            return $value !== '';
+        })));
     }
 
     private function hydrateBooks(array $rows): array
