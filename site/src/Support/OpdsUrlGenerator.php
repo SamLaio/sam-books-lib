@@ -40,6 +40,21 @@ final class OpdsUrlGenerator
         return $this->feed('osd');
     }
 
+    public function download(int $bookId, string $format, string $name = ''): string
+    {
+        $path = rtrim($this->basePath, '/')
+            . '/download/'
+            . rawurlencode((string) $bookId)
+            . '/'
+            . rawurlencode($format);
+
+        if ($name !== '') {
+            $path .= '/' . rawurlencode($name);
+        }
+
+        return $this->toAbsoluteUrl($path);
+    }
+
     public function searchTemplate(): string
     {
         $searchFeedUrl = $this->feed('search');

@@ -2,7 +2,8 @@
 /data/**
 /site/data/**
 /.history
-for_nas.yml
+*.yml
+!docker-compose.template.yml
 site/vendor/*
 pushDocker.bat
 read

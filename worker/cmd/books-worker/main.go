@@ -410,14 +410,42 @@ func resolveBookAttachment(b bookRow) (string, string, string, error) {
 	for _, ext := range preferred {
 		for k, p := range formats {
 			if strings.EqualFold(k, ext) && p != "" && fileExists(p) {
-				return p, filepath.Base(p), mime.TypeByExtension(filepath.Ext(p)), nil
+				return p, buildAttachmentName(b, p), mime.TypeByExtension(filepath.Ext(p)), nil
 			}
 		}
 	}
 	if b.Path != "" && fileExists(b.Path) {
-		return b.Path, filepath.Base(b.Path), mime.TypeByExtension(filepath.Ext(b.Path)), nil
+		return b.Path, buildAttachmentName(b, b.Path), mime.TypeByExtension(filepath.Ext(b.Path)), nil
 	}
 	return "", "", "", errors.New("book attachment file not found")
+}
+
+func sanitizeAttachmentPart(value string, fallback string) string {
+	normalized := strings.TrimSpace(value)
+	if normalized == "" {
+		return fallback
+	}
+
+	replacer := strings.NewReplacer("\\", " ", "/", " ", ":", " ", "*", " ", "?", " ", "\"", " ", "<", " ", ">", " ", "|", " ")
+	normalized = replacer.Replace(normalized)
+	normalized = strings.Join(strings.Fields(normalized), " ")
+	normalized = strings.Trim(normalized, " .\t\r\n")
+	if normalized == "" {
+		return fallback
+	}
+	return normalized
+}
+
+func buildAttachmentName(b bookRow, path string) string {
+	title := sanitizeAttachmentPart(b.Title, "Unknown Title")
+	author := sanitizeAttachmentPart(b.Author, "Unknown Author")
+	extension := filepath.Ext(path)
+
+	name := fmt.Sprintf("%s - %s", title, author)
+	if extension != "" {
+		name += extension
+	}
+	return name
 }
 
 type smtpSettings struct {

@@ -760,10 +760,11 @@ final class OpdsService
         foreach ($this->assetService->listDownloadablesForBook($book) as $download) {
             $link = $dom->createElementNS(self::ATOM_NS, 'link');
             $link->setAttribute('rel', 'http://opds-spec.org/acquisition');
-            $link->setAttribute('href', $urls->feed('download', [
-                'id' => $bookId,
-                'format' => (string) ($download['format'] ?? ''),
-            ]));
+            $link->setAttribute('href', $urls->download(
+                $bookId,
+                (string) ($download['format'] ?? ''),
+                (string) ($download['name'] ?? '')
+            ));
             $link->setAttribute('type', (string) ($download['mime_type'] ?? 'application/octet-stream'));
             $link->setAttribute('title', strtoupper((string) ($download['format'] ?? 'FILE')));
             $link->setAttribute('length', (string) ((int) ($download['size'] ?? 0)));

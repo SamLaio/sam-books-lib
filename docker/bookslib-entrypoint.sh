@@ -8,11 +8,16 @@ THUMB_DIR="${APP_ROOT}/thumb"
 RUNTIME_UID="${PUID:-82}"
 RUNTIME_GID="${PGID:-82}"
 
+fix_runtime_permissions() {
+  chown -R "${RUNTIME_UID}:${RUNTIME_GID}" "${DATA_DIR}" "${THUMB_DIR}" || true
+  chmod 0775 "${DATA_DIR}" "${OPDS_CACHE_DIR}" "${THUMB_DIR}" || true
+  find "${DATA_DIR}" -maxdepth 1 -type f \( -name '*.sqlite' -o -name '*.sqlite-*' \) -exec chown "${RUNTIME_UID}:${RUNTIME_GID}" {} \; -exec chmod 0664 {} \; || true
+  find "${DATA_DIR}" -maxdepth 1 -type f \( -name '*.lock' -o -name '*.key' -o -name '*.log' \) -exec chown "${RUNTIME_UID}:${RUNTIME_GID}" {} \; -exec chmod 0664 {} \; || true
+  find "${OPDS_CACHE_DIR}" -maxdepth 1 -type f -name '*.xml' -exec chown "${RUNTIME_UID}:${RUNTIME_GID}" {} \; -exec chmod 0664 {} \; || true
+}
+
 mkdir -p "${DATA_DIR}" "${OPDS_CACHE_DIR}" "${THUMB_DIR}" /run/nginx /var/log/nginx
-chown -R "${RUNTIME_UID}:${RUNTIME_GID}" "${DATA_DIR}" "${THUMB_DIR}" || true
-chmod 0777 "${DATA_DIR}" "${OPDS_CACHE_DIR}" || true
-find "${DATA_DIR}" -maxdepth 1 -type f \( -name '*.sqlite' -o -name '*.sqlite-*' -o -name '*.lock' -o -name '*.key' -o -name '*.log' \) -exec chmod 0666 {} \; || true
-find "${OPDS_CACHE_DIR}" -maxdepth 1 -type f -name '*.xml' -exec chmod 0666 {} \; || true
+fix_runtime_permissions
 
 cat > /usr/local/etc/php/conf.d/zz-bookslib.ini <<EOF
 memory_limit=${PHP_MEMORY_LIMIT:-64M}
@@ -42,13 +47,10 @@ catch_workers_output = yes
 decorate_workers_output = no
 EOF
 
-php "${APP_ROOT}/init_runtime.php"
-chown -R "${RUNTIME_UID}:${RUNTIME_GID}" "${DATA_DIR}" "${THUMB_DIR}" || true
-chmod 0777 "${DATA_DIR}" "${OPDS_CACHE_DIR}" || true
-find "${DATA_DIR}" -maxdepth 1 -type f \( -name '*.sqlite' -o -name '*.sqlite-*' -o -name '*.lock' -o -name '*.key' -o -name '*.log' \) -exec chmod 0666 {} \; || true
-find "${OPDS_CACHE_DIR}" -maxdepth 1 -type f -name '*.xml' -exec chmod 0666 {} \; || true
+su-exec "${RUNTIME_UID}:${RUNTIME_GID}" php "${APP_ROOT}/init_runtime.php"
+fix_runtime_permissions
 
-cat > /etc/crontabs/root <<EOF
+cat > /etc/crontabs/www-data <<EOF
 * * * * * cd ${APP_ROOT} && /usr/local/bin/books-worker --app-root ${APP_ROOT} --once >> ${DATA_DIR}/cron.log 2>&1
 EOF
 

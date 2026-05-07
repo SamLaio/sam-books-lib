@@ -35,10 +35,7 @@ final class DownloadController
 
             header('Content-Type: ' . $download['mime_type']);
             header('Content-Length: ' . (string) $download['size']);
-            header(
-                'Content-Disposition: attachment; filename="' . addcslashes($download['name'], "\"\\")
-                . '"; filename*=UTF-8\'\'' . rawurlencode($download['name'])
-            );
+            header('Content-Disposition: ' . $this->buildAttachmentDisposition((string) $download['name']));
             header('X-Content-Type-Options: nosniff');
             header('Cache-Control: private, max-age=3600');
 
@@ -87,5 +84,20 @@ final class DownloadController
         header('Content-Type: text/plain; charset=UTF-8');
         echo $message;
         exit;
+    }
+
+    private function buildAttachmentDisposition(string $name): string
+    {
+        $fallback = preg_replace('/[^A-Za-z0-9._ -]/', '_', $name);
+        if (!is_string($fallback)) {
+            $fallback = '';
+        }
+        $fallback = trim(preg_replace('/\s+/', ' ', $fallback) ?? '');
+        if ($fallback === '' || $fallback === '.' || $fallback === '..') {
+            $fallback = 'download.bin';
+        }
+
+        return 'attachment; filename="' . addcslashes($fallback, "\"\\")
+            . '"; filename*=UTF-8\'\'' . rawurlencode($name);
     }
 }

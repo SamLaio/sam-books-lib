@@ -23,6 +23,7 @@ RUN apk add --no-cache \
         nginx \
         procps \
         sqlite-libs \
+        su-exec \
         tzdata \
     && apk add --no-cache --virtual .build-deps \
         $PHPIZE_DEPS \

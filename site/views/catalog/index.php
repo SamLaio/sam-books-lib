@@ -7,20 +7,24 @@ $escape = static function ($value): string {
 <div class="wrap">
   <div class="panel">
     <h1><a class="title-home-link" href="index.php"><?= $escape($siteTitle ?? $t('layout.default_title')) ?></a></h1>
-    <p class="meta">
-      <span class="search-help-text"><?= $t('layout.search_help') ?></span>
-      <?php if (!empty($authEnabled)): ?>
-        | <?= $escape($t('layout.logged_in', ['username' => (string) ($currentUsername ?? '')])) ?>
-        <?php if (!empty($isAdmin)): ?>
-          | <a class="title-home-link" href="<?= $escape($adminSettingsUrl ?? 'admin_settings.php') ?>"><?= $escape($t('layout.admin_settings')) ?></a>
+    <div class="meta">
+      <p class="meta__line meta__line--account">
+        <?php if (!empty($authEnabled)): ?>
+          <?= $escape($t('layout.logged_in', ['username' => (string) ($currentUsername ?? '')])) ?>
+          <?php if (!empty($isAdmin)): ?>
+            | <a class="title-home-link" href="<?= $escape($adminSettingsUrl ?? 'admin_settings.php') ?>"><?= $escape($t('layout.admin_settings')) ?></a>
+          <?php endif; ?>
+          | <a class="title-home-link" href="<?= $escape($settingsUrl ?? 'settings.php') ?>"><?= $escape($t('layout.account_settings')) ?></a>
+          | <a class="title-home-link" href="<?= $escape($logoutUrl ?? 'logout.php') ?>"><?= $escape($t('common.logout')) ?></a>
         <?php endif; ?>
-        | <a class="title-home-link" href="<?= $escape($settingsUrl ?? 'settings.php') ?>"><?= $escape($t('layout.account_settings')) ?></a>
-        | <a class="title-home-link" href="<?= $escape($logoutUrl ?? 'logout.php') ?>"><?= $escape($t('common.logout')) ?></a>
-      <?php endif; ?>
-      <?php if ($lastRebuildAt !== null): ?>
-        | <?= $escape($t('layout.last_rebuild', ['time' => (string) $lastRebuildAt])) ?>
-      <?php endif; ?>
-    </p>
+        <?php if ($lastRebuildAt !== null): ?>
+          <?= !empty($authEnabled) ? ' | ' : '' ?><?= $escape($t('layout.last_rebuild', ['time' => (string) $lastRebuildAt])) ?>
+        <?php endif; ?>
+      </p>
+      <p class="meta__line meta__line--search">
+        <span class="search-help-text"><?= $t('layout.search_help') ?></span> |
+      </p>
+    </div>
 
     <div class="toolbar">
       <form method="get" action="<?= $escape($searchAction) ?>" class="search-form">

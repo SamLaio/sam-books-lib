@@ -239,10 +239,7 @@ final class OpdsController
 
         if ($attachment) {
             $name = (string) ($asset['name'] ?? 'download.bin');
-            header(
-                'Content-Disposition: attachment; filename="' . addcslashes($name, "\"\\")
-                . '"; filename*=UTF-8\'\'' . rawurlencode($name)
-            );
+            header('Content-Disposition: ' . $this->buildAttachmentDisposition($name));
             header('Cache-Control: private, max-age=3600');
         } else {
             header('Cache-Control: public, max-age=3600');
@@ -292,5 +289,20 @@ final class OpdsController
         header('Content-Type: text/plain; charset=UTF-8');
         echo $message;
         exit;
+    }
+
+    private function buildAttachmentDisposition(string $name): string
+    {
+        $fallback = preg_replace('/[^A-Za-z0-9._ -]/', '_', $name);
+        if (!is_string($fallback)) {
+            $fallback = '';
+        }
+        $fallback = trim(preg_replace('/\s+/', ' ', $fallback) ?? '');
+        if ($fallback === '' || $fallback === '.' || $fallback === '..') {
+            $fallback = 'download.bin';
+        }
+
+        return 'attachment; filename="' . addcslashes($fallback, "\"\\")
+            . '"; filename*=UTF-8\'\'' . rawurlencode($name);
     }
 }

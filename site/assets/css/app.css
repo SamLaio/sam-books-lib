@@ -83,6 +83,14 @@ h1 {
   font-size: 14px;
 }
 
+.meta__line {
+  margin: 0;
+}
+
+.meta__line + .meta__line {
+  margin-top: 4px;
+}
+
 form {
   margin: 0;
 }
@@ -1964,7 +1972,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     border-width: 4px;
   }
 
-  .search-help-text {
+  .meta__line--search {
     display: none;
   }
 

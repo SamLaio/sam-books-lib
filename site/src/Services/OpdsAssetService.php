@@ -273,6 +273,12 @@ final class OpdsAssetService
 
     private function detectMimeType(string $filePath): string
     {
+        $extension = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION));
+        $knownType = $this->mimeTypeFromExtension($extension);
+        if ($knownType !== null) {
+            return $knownType;
+        }
+
         if (function_exists('finfo_open')) {
             $finfo = finfo_open(FILEINFO_MIME_TYPE);
             if ($finfo !== false) {
@@ -285,20 +291,25 @@ final class OpdsAssetService
             }
         }
 
-        $extension = strtolower((string) pathinfo($filePath, PATHINFO_EXTENSION));
+        return 'application/octet-stream';
+    }
 
+    private function mimeTypeFromExtension(string $extension): ?string
+    {
         return match ($extension) {
             'epub' => 'application/epub+zip',
             'mobi' => 'application/x-mobipocket-ebook',
             'azw', 'azw3' => 'application/vnd.amazon.ebook',
             'pdf' => 'application/pdf',
+            'cbz' => 'application/vnd.comicbook+zip',
+            'cbr' => 'application/vnd.comicbook-rar',
             'txt' => 'text/plain',
             'html', 'htm' => 'text/html',
             'rtf' => 'application/rtf',
             'jpg', 'jpeg' => 'image/jpeg',
             'png' => 'image/png',
             'gif' => 'image/gif',
-            default => 'application/octet-stream',
+            default => null,
         };
     }
 
