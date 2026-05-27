@@ -29,6 +29,8 @@ return [
     'common.all' => '全部',
     'common.token' => 'Token',
     'common.url' => 'URL',
+    'common.copied' => '已複製',
+    'common.copy_failed' => '複製失敗',
     'common.loading' => '載入中...',
     'common.not_provided' => '未提供',
 
@@ -87,6 +89,7 @@ return [
     'settings.update_password' => '更新密碼',
     'settings.opds_token_heading' => 'OPDS API Token',
     'settings.opds_token_hint' => '此 Token 可用於 `.../opds/{token}` 直接存取 OPDS。',
+    'settings.copy_opds_url' => '複製 OPDS URL',
     'settings.rotate_token' => '重新產生 Token',
 
     'auth.label.password' => '密碼',

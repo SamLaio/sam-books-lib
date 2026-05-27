@@ -118,11 +118,14 @@ Image build 分兩階段：
 容器啟動後由 `docker/bookslib-entrypoint.sh` 負責：
 
 1. 建立 `data/`、`data/opds-cache/`、`thumb/`。
-2. 依 `PUID` / `PGID` 調整資料目錄與 runtime 檔案權限。
-3. 寫入 PHP 與 PHP-FPM runtime 設定。
-4. 執行 `site/init_runtime.php`。
-5. 建立 crontab，每分鐘執行一次 `books-worker --once`。
-6. 啟動 `crond`、`php-fpm` 與 nginx。
+2. 建立或沿用符合 `PUID` / `PGID` 的 runtime 使用者。
+3. 依 `PUID` / `PGID` 調整資料目錄與 runtime 檔案權限。
+4. 寫入 PHP 與 PHP-FPM runtime 設定。
+5. 執行 `site/init_runtime.php`。
+6. 建立 crontab，每分鐘執行一次 `books-worker --once`。
+7. 啟動 `crond`、`php-fpm` 與 nginx。
+
+PHP-FPM pool、`init_runtime.php` 和 cron worker 必須使用同一組 runtime UID/GID；不要把 pool user 寫死為 `www-data`，否則正式 Linux 主機上 SQLite 可能會在初始化成功後被網頁請求判定為不可寫。
 
 `site/data` 是 bind mount。若舊檔案 owner 或權限錯誤，entrypoint 會盡量修正；如果底層檔案系統拒絕 chmod/chown，最乾淨的處理方式通常是停容器後清空 `site/data` 再重建。
 
@@ -130,12 +133,12 @@ Image build 分兩階段：
 
 Docker Compose 以 environment 注入設定。程式也會讀取 `site/config.env` 與 `site/config.docker.env` 作為預設或本機開發參考。常見設定集中在：
 
-- 站台：`SITE_TITLE`、`SITE_BASE_URL`、`APP_LOCALE`、`SITE_DEFAULT_THEME`、`OPDS_PAGE_SIZE`。
+- 站台：`SITE_TITLE`、`SITE_BASE_URL`、`APP_LOCALE`、`SITE_DEFAULT_THEME`、`CATALOG_DEFAULT_SORT_FIELD`、`CATALOG_DEFAULT_SORT_DIRECTION`、`OPDS_PAGE_SIZE`。
 - 書庫：`CALIBRE_LIBRARY_PATH`、`SQLITE_INDEX_PATH`。
 - 掃描：`SCAN_INTERVAL_MINUTES`、`SCAN_BATCH_SIZE`、`SCAN_MAX_BOOKS_PER_RUN`、`SCAN_TMP_SQLITE_PATH`、`SCAN_WATCHDOG_TIMEOUT_SECONDS`。
 - 帳號：`AUTH_ENABLED`、`AUTH_USERNAME`、`AUTH_PASSWORD`、`AUTH_EMAIL`、`AUTH_SETTINGS_DB_PATH`、`MIGRATIONS_DB_PATH`、`AUTH_SECRET_KEY`。
 - SMTP：`SMTP_HOST`、`SMTP_PORT`、`SMTP_ENCRYPTION`、`SMTP_USERNAME`、`SMTP_PASSWORD`。
-- 容器：`PUID`、`PGID`、`TZ`、`PHP_PM_*`、`PHP_MEMORY_LIMIT`、`PHP_OPCACHE_ENABLE`。
+- 容器：`PUID`、`PGID`、`TZ`、`PHP_PM_*`、`PHP_MEMORY_LIMIT`、`PHP_OPCACHE_ENABLE`、`BOOKSLIB_X_ACCEL_REDIRECT`、`COMPOSER_ROOT_VERSION`。
 
 模板預設值偏向低記憶體與安全測試：
 
@@ -286,6 +289,7 @@ OPDS：
 Email / Download / Status：
 
 - `Calibre\Services\DownloadService`
+- `Calibre\Http\AccelRedirect`
 - `Calibre\Services\SmtpMailer`
 - `Calibre\Services\ReadStatusService`
 - `Calibre\Controllers\SendBookController`
@@ -366,6 +370,8 @@ worker 主要負責：
 
 OPDS URL 生成優先使用 `SITE_BASE_URL`。修改相關邏輯時，請確認 token URL、cover URL、download URL、pagination link 與 OpenSearch template 都正常。
 
+`BOOKSLIB_X_ACCEL_REDIRECT=1` 時，OPDS cover/download 與一般下載會在 PHP 完成授權與路徑檢查後交給 nginx internal location 傳送。相關 internal route 定義在 `docker/nginx/default.conf`，PHP 端入口為 `Calibre\Http\AccelRedirect`。修改下載或封面邏輯時，需同時確認 X-Accel 與 PHP fallback 都能正常回應。
+
 ## 登入與魔術登入
 
 一般登入：
@@ -373,7 +379,7 @@ OPDS URL 生成優先使用 `SITE_BASE_URL`。修改相關邏輯時，請確認 
 - 入口：`site/login.php`。
 - 驗證碼：`LoginCaptchaService`。
 - 帳密與使用者狀態：`AuthService`。
-- 密碼與敏感設定依 `AUTH_SECRET_KEY` 加密；未設定時會建立 `data/auth.key`。
+- 密碼與敏感設定依 `AUTH_SECRET_KEY` 加密；未設定時會建立 `data/auth.key`，舊版 `data/auth.secret` 會作為相容 fallback。
 
 登入失敗規則：
 

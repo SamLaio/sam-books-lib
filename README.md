@@ -10,8 +10,9 @@ SamBooksLib 是一個可自行架設的電子書書庫網站，適合把 Calibre
 - 下載原始書籍檔案。
 - 標記已讀 / 未讀。
 - OPDS 書庫，支援 Basic Auth 與個人 token。
+- 個人設定頁可一鍵複製 OPDS token URL。
 - 帳號密碼登入、魔術登入 QR code / 一次性連結。
-- 管理員後台可管理使用者、SMTP、書庫維護與背景工作。
+- 管理員後台可管理使用者、SMTP、使用者可見範圍、書庫維護與背景工作。
 - SMTP 寄書排程。
 - 自動或手動重建索引，並可重建非 Calibre 書目的封面。
 - 介面語系支援 `zhTW` 與 `en`，主題支援淺色與深色。
@@ -82,7 +83,7 @@ site/data/new_pass.txt
 - `/login.php`：登入頁。
 - `/settings.php`：個人設定與 OPDS token。
 - `/admin_settings.php`：管理員後台。
-- `/opds.php`：OPDS 入口。
+- `/opds.php` 或 `/opds`：OPDS 入口。
 - `/reader.php?id=書籍ID`：站內閱讀器。
 
 ## OPDS
@@ -93,7 +94,7 @@ site/data/new_pass.txt
 http://你的站台/opds.php
 ```
 
-登入啟用時，OPDS 支援帳號密碼 Basic Auth。使用者也可以在 `/settings.php` 取得 OPDS API Token，使用類似下列網址直接存取：
+登入啟用時，OPDS 支援帳號密碼 Basic Auth。使用者也可以在 `/settings.php` 取得 OPDS API Token，設定頁會顯示並可一鍵複製類似下列的直接存取網址：
 
 ```text
 http://你的站台/opds/你的Token
@@ -109,6 +110,8 @@ http://你的站台/opds/你的Token
 - `SITE_BASE_URL`：對外網址，建議不要加結尾 `/`。
 - `APP_LOCALE`：介面語系，支援 `zhTW` / `en`。
 - `SITE_DEFAULT_THEME`：預設主題，支援 `light` / `dark`。
+- `CATALOG_DEFAULT_SORT_FIELD`：書庫預設排序欄位，支援 `is_read` / `title` / `author` / `series` / `added_at`。
+- `CATALOG_DEFAULT_SORT_DIRECTION`：書庫預設排序方向，支援 `asc` / `desc`。
 - `OPDS_PAGE_SIZE`：OPDS 單頁顯示上限。
 
 ### 書庫與索引
@@ -141,6 +144,15 @@ http://你的站台/opds/你的Token
 
 SMTP 未完整設定時，寄送書籍功能會停用。
 
+### 容器與下載
+
+- `PUID` / `PGID` / `TZ`：容器寫入檔案的使用者、群組與時區。
+- `PHP_PM_*` / `PHP_MEMORY_LIMIT` / `PHP_OPCACHE_ENABLE`：PHP-FPM 與記憶體設定。
+- `BOOKSLIB_X_ACCEL_REDIRECT`：設為 `1` 時，下載與 OPDS 封面 / 檔案會優先交給 nginx `X-Accel-Redirect` 傳送，PHP 只負責授權與路徑檢查。
+- `COMPOSER_ROOT_VERSION`：容器內 Composer 根套件版本，模板目前預設 `1.0.0`。
+
+下載路徑會限制在 `CALIBRE_LIBRARY_PATH` 之內；`site/data` 內的 SQLite、key、log、lock 等本機狀態檔也會由 nginx 設定拒絕直接存取。
+
 ## 日常維護
 
 查看容器狀態：
@@ -166,6 +178,14 @@ docker compose up -d --build --force-recreate
 ```bash
 docker compose exec -T sam-books-lib php /var/www/html/migrate.php status
 ```
+
+查看目前容器環境中的套件版號：
+
+```bash
+docker compose exec -T sam-books-lib printenv COMPOSER_ROOT_VERSION
+```
+
+管理員後台底部也會顯示「版本驗證」字串，用來確認容器內載入的程式檔案是否已更新。
 
 ## 乾淨重建資料
 

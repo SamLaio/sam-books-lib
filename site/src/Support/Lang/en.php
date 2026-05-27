@@ -29,6 +29,8 @@ return [
     'common.all' => 'All',
     'common.token' => 'Token',
     'common.url' => 'URL',
+    'common.copied' => 'Copied',
+    'common.copy_failed' => 'Copy failed',
     'common.loading' => 'Loading...',
     'common.not_provided' => 'Not provided',
 
@@ -87,6 +89,7 @@ return [
     'settings.update_password' => 'Update Password',
     'settings.opds_token_heading' => 'OPDS API Token',
     'settings.opds_token_hint' => 'Use this token with `.../opds/{token}` to access OPDS directly.',
+    'settings.copy_opds_url' => 'Copy OPDS URL',
     'settings.rotate_token' => 'Regenerate Token',
 
     'auth.label.password' => 'Password',

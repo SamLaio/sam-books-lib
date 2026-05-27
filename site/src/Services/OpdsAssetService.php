@@ -2,6 +2,8 @@
 
 namespace Calibre\Services;
 
+use Calibre\Book;
+use Calibre\CalibreLibrary;
 use Calibre\Http\HttpException;
 use Calibre\LibraryIndex;
 use Calibre\ScanService;
@@ -28,6 +30,16 @@ final class OpdsAssetService
         }
 
         return $book;
+    }
+
+    public function getLibraryPath(): string
+    {
+        return $this->scanService->getLibraryPath();
+    }
+
+    public function getThumbDir(): string
+    {
+        return $this->scanService->getThumbDir();
     }
 
     public function listDownloadablesForBook(array $book): array
@@ -96,6 +108,23 @@ final class OpdsAssetService
 
     public function resolveCoverForBook(array $book): ?array
     {
+        $cover = $this->resolveExistingCoverForBook($book);
+        if ($cover !== null) {
+            return $cover;
+        }
+
+        $lazyCoverPath = $this->resolveLazyCoverPath($book);
+        if ($lazyCoverPath === null) {
+            return null;
+        }
+
+        $book['cover_path'] = $lazyCoverPath;
+
+        return $this->resolveExistingCoverForBook($book);
+    }
+
+    public function resolveExistingCoverForBook(array $book): ?array
+    {
         $coverPath = trim((string) ($book['cover_path'] ?? ''));
         if ($coverPath === '') {
             return null;
@@ -125,6 +154,57 @@ final class OpdsAssetService
             'size' => $fileSize,
             'modified_at' => $this->normalizeFileDate(filemtime($resolvedPath)),
         ];
+    }
+
+    public function canLazyResolveCoverForBook(array $book): bool
+    {
+        $formats = $this->decodeFormatCandidates($book);
+
+        return isset($formats['epub']) || isset($formats['cbz']);
+    }
+
+    private function resolveLazyCoverPath(array $book): ?string
+    {
+        $formats = $this->decodeFormatCandidates($book);
+        if ($formats === []) {
+            return null;
+        }
+
+        $metadata = [];
+        $metadataJson = $book['metadata_json'] ?? null;
+        if (is_string($metadataJson) && trim($metadataJson) !== '') {
+            $decodedMetadata = json_decode($metadataJson, true);
+            if (is_array($decodedMetadata)) {
+                $metadata = $decodedMetadata;
+            }
+        }
+
+        $library = new CalibreLibrary($this->scanService->getLibraryPath(), $this->scanService->getThumbDir());
+        $bookModel = new Book(
+            (string) ($book['title'] ?? ''),
+            (string) ($book['author'] ?? ''),
+            (string) ($book['path'] ?? ''),
+            $formats,
+            $metadata,
+            null
+        );
+
+        $coverPath = $library->ensureBookCover($bookModel);
+        if ($coverPath === null || !is_file($coverPath)) {
+            return null;
+        }
+
+        $bookId = (int) ($book['id'] ?? 0);
+        if ($bookId > 0) {
+            $index = new LibraryIndex($this->scanService->getSqlitePath());
+            try {
+                $index->updateBookCoverPathById($bookId, $coverPath);
+            } finally {
+                $index->close();
+            }
+        }
+
+        return $coverPath;
     }
 
     public function resolveCoverByBookId(int $bookId): array

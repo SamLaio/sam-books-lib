@@ -55,7 +55,7 @@ COPY --from=books-worker-build /out/books-worker /usr/local/bin/books-worker
 RUN chmod +x /usr/local/bin/bookslib-entrypoint /usr/local/bin/books-worker
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -fsS http://127.0.0.1/index.php >/dev/null || exit 1
+    CMD curl -fsS http://127.0.0.1/favicon.ico >/dev/null || exit 1
 
 EXPOSE 80
 

@@ -16,6 +16,11 @@ final class DownloadService
         $this->scanService = $scanService ?? new ScanService($appRoot);
     }
 
+    public function getLibraryPath(): string
+    {
+        return $this->scanService->getLibraryPath();
+    }
+
     public function resolveByBookId(int $bookId): array
     {
         $index = new LibraryIndex($this->scanService->getSqlitePath());

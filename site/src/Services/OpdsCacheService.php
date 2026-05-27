@@ -167,10 +167,31 @@ final class OpdsCacheService
         $payload = [
             'accept' => $accept,
             'query' => $normalizedQuery,
+            'url_context' => $this->normalizeUrlContext($server),
             'visibility' => trim((string) ($server['OPDS_VISIBILITY_KEY'] ?? 'public')),
         ];
 
         return hash('sha256', json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
+    }
+
+    private function normalizeUrlContext(array $server): array
+    {
+        $keys = [
+            'OPDS_BASE_PATH',
+            'HTTP_X_FORWARDED_HOST',
+            'HTTP_X_FORWARDED_PROTO',
+            'HTTP_HOST',
+            'HTTPS',
+            'SERVER_NAME',
+            'SERVER_PORT',
+        ];
+
+        $context = [];
+        foreach ($keys as $key) {
+            $context[strtolower($key)] = trim((string) ($server[$key] ?? ''));
+        }
+
+        return $context;
     }
 
     private function normalizeQuery(array $query): array

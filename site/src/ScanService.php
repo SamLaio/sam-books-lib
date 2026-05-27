@@ -793,7 +793,8 @@ final class ScanService
                     // For filesystem-only books, reuse our cached cover before extracting again.
                     $resolvedCover = $snapshotCoverPath;
                 } else {
-                    $resolvedCover = $library->ensureBookCover($book);
+                    // Archive cover extraction is deferred until the first cover request.
+                    $resolvedCover = null;
                 }
 
                 if (($originalCover === null || !file_exists($originalCover))

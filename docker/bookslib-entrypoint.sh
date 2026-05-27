@@ -7,6 +7,32 @@ OPDS_CACHE_DIR="${DATA_DIR}/opds-cache"
 THUMB_DIR="${APP_ROOT}/thumb"
 RUNTIME_UID="${PUID:-82}"
 RUNTIME_GID="${PGID:-82}"
+RUNTIME_USER="${BOOKSLIB_RUNTIME_USER:-bookslib}"
+RUNTIME_GROUP="${BOOKSLIB_RUNTIME_GROUP:-bookslib}"
+
+ensure_runtime_identity() {
+  existing_group="$(awk -F: -v gid="${RUNTIME_GID}" '$3 == gid { print $1; exit }' /etc/group || true)"
+  if [ -n "${existing_group}" ]; then
+    RUNTIME_GROUP="${existing_group}"
+  else
+    addgroup -S -g "${RUNTIME_GID}" "${RUNTIME_GROUP}" >/dev/null 2>&1 || true
+    existing_group="$(awk -F: -v gid="${RUNTIME_GID}" '$3 == gid { print $1; exit }' /etc/group || true)"
+    if [ -n "${existing_group}" ]; then
+      RUNTIME_GROUP="${existing_group}"
+    fi
+  fi
+
+  existing_user="$(awk -F: -v uid="${RUNTIME_UID}" '$3 == uid { print $1; exit }' /etc/passwd || true)"
+  if [ -n "${existing_user}" ]; then
+    RUNTIME_USER="${existing_user}"
+  else
+    adduser -S -D -H -h /tmp -s /sbin/nologin -u "${RUNTIME_UID}" -G "${RUNTIME_GROUP}" "${RUNTIME_USER}" >/dev/null 2>&1 || true
+    existing_user="$(awk -F: -v uid="${RUNTIME_UID}" '$3 == uid { print $1; exit }' /etc/passwd || true)"
+    if [ -n "${existing_user}" ]; then
+      RUNTIME_USER="${existing_user}"
+    fi
+  fi
+}
 
 fix_runtime_permissions() {
   chown -R "${RUNTIME_UID}:${RUNTIME_GID}" "${DATA_DIR}" "${THUMB_DIR}" || true
@@ -17,6 +43,7 @@ fix_runtime_permissions() {
 }
 
 mkdir -p "${DATA_DIR}" "${OPDS_CACHE_DIR}" "${THUMB_DIR}" /run/nginx /var/log/nginx
+ensure_runtime_identity
 fix_runtime_permissions
 
 cat > /usr/local/etc/php/conf.d/zz-bookslib.ini <<EOF
@@ -32,8 +59,8 @@ EOF
 
 cat > /usr/local/etc/php-fpm.d/zz-bookslib.conf <<EOF
 [www]
-user = www-data
-group = www-data
+user = ${RUNTIME_USER}
+group = ${RUNTIME_GROUP}
 listen = 127.0.0.1:9000
 listen.allowed_clients = 127.0.0.1
 pm = ${PHP_PM:-ondemand}
@@ -50,7 +77,7 @@ EOF
 su-exec "${RUNTIME_UID}:${RUNTIME_GID}" php "${APP_ROOT}/init_runtime.php"
 fix_runtime_permissions
 
-cat > /etc/crontabs/www-data <<EOF
+cat > "/etc/crontabs/${RUNTIME_USER}" <<EOF
 * * * * * cd ${APP_ROOT} && /usr/local/bin/books-worker --app-root ${APP_ROOT} --once >> ${DATA_DIR}/cron.log 2>&1
 EOF
 

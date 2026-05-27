@@ -212,6 +212,16 @@ final class OpdsService
         return $this->index->isBookVisible($bookId, $hiddenAuthors, $hiddenTags);
     }
 
+    public function getLibraryPath(): string
+    {
+        return $this->assetService->getLibraryPath();
+    }
+
+    public function getThumbDir(): string
+    {
+        return $this->assetService->getThumbDir();
+    }
+
     public function renderSearchDescription(array $server): string
     {
         $urls = new OpdsUrlGenerator($server, $this->siteBaseUrl);
@@ -745,8 +755,8 @@ final class OpdsService
             $entry->appendChild($category);
         }
 
-        $cover = $this->assetService->resolveCoverForBook($book);
-        if ($cover !== null) {
+        $cover = $this->assetService->resolveExistingCoverForBook($book);
+        if ($cover !== null || $this->assetService->canLazyResolveCoverForBook($book)) {
             $coverUrl = $urls->feed('cover', ['id' => $bookId]);
             $coverType = (string) ($cover['mime_type'] ?? 'image/jpeg');
 

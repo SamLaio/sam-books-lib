@@ -574,11 +574,34 @@ button[disabled] {
   align-items: stretch;
 }
 
+.opds-token-summary__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: 100%;
+}
+
 .opds-token-summary__value {
   display: block;
+  flex: 1 1 auto;
+  min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.copy-inline-btn {
+  flex: 0 0 auto;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
+  background: #334155;
+}
+
+.copy-inline-btn:hover {
+  background: #0f766e;
 }
 
 table {

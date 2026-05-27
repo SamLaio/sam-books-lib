@@ -67,7 +67,16 @@ $currentLocale = (string) ($currentLocale ?? 'zhTW');
     <div class="summary opds-token-summary">
       <span class="opds-token-summary__value"><?= $escape($t('common.token')) ?>：<?= $escape($user['api_token'] ?? '') ?></span>
       <?php if (($opdsTokenUrl ?? '') !== ''): ?>
-        <span class="opds-token-summary__value"><?= $escape($t('common.url')) ?>：<?= $escape($opdsTokenUrl) ?></span>
+        <span class="opds-token-summary__row">
+          <span class="opds-token-summary__value"><?= $escape($t('common.url')) ?>：<?= $escape($opdsTokenUrl) ?></span>
+          <button
+            type="button"
+            class="copy-inline-btn"
+            data-copy-text="<?= $escape($opdsTokenUrl) ?>"
+            data-copy-success-label="<?= $escape($t('common.copied')) ?>"
+            data-copy-error-label="<?= $escape($t('common.copy_failed')) ?>"
+          ><?= $escape($t('settings.copy_opds_url')) ?></button>
+        </span>
       <?php endif; ?>
     </div>
     <form method="post" action="settings.php">

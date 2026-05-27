@@ -240,6 +240,65 @@
 
   persistCatalogStateCookie();
 
+  const copyText = async (value) => {
+    if (!value) {
+      throw new Error("No text to copy.");
+    }
+
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+
+    try {
+      if (!document.execCommand("copy")) {
+        throw new Error("Copy command failed.");
+      }
+    } finally {
+      textarea.remove();
+    }
+  };
+
+  document.querySelectorAll("[data-copy-text]").forEach((button) => {
+    if (!(button instanceof HTMLButtonElement)) {
+      return;
+    }
+
+    const idleLabel = button.textContent || "Copy";
+    const successLabel = button.getAttribute("data-copy-success-label") || idleLabel;
+    const errorLabel = button.getAttribute("data-copy-error-label") || idleLabel;
+    let resetTimer = null;
+
+    button.addEventListener("click", async () => {
+      const copyValue = button.getAttribute("data-copy-text") || "";
+      if (resetTimer !== null) {
+        window.clearTimeout(resetTimer);
+      }
+
+      try {
+        await copyText(copyValue);
+        button.textContent = successLabel;
+      } catch (error) {
+        button.textContent = errorLabel;
+      }
+
+      resetTimer = window.setTimeout(() => {
+        button.textContent = idleLabel;
+        resetTimer = null;
+      }, 1600);
+    });
+  });
+
   if (scanRequestForm && scanRequestButton) {
     scanRequestForm.addEventListener("submit", async (event) => {
       event.preventDefault();

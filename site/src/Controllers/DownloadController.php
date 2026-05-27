@@ -3,6 +3,7 @@
 namespace Calibre\Controllers;
 
 use Calibre\Http\HttpException;
+use Calibre\Http\AccelRedirect;
 use Calibre\Services\DownloadService;
 use Calibre\Support\Lang;
 
@@ -41,6 +42,13 @@ final class DownloadController
 
             if ($requestMethod === 'HEAD') {
                 exit;
+            }
+
+            $internalUri = AccelRedirect::internalUriFor($download['path'], [
+                '/__bookslib_internal/books' => $this->downloadService->getLibraryPath(),
+            ]);
+            if ($internalUri !== null) {
+                AccelRedirect::send($internalUri);
             }
 
             $this->streamFile($download['path']);

@@ -257,7 +257,8 @@ final class CatalogController
 
         foreach ($rows as $row) {
             $coverPreviewUrl = null;
-            if (isset($row['id']) && trim((string) ($row['cover_path'] ?? '')) !== '') {
+            if (isset($row['id'])
+                && (trim((string) ($row['cover_path'] ?? '')) !== '' || $this->canLazyResolveCover($row))) {
                 $coverPreviewUrl = 'opds.php?feed=cover&id=' . (int) $row['id'];
             }
 
@@ -286,6 +287,39 @@ final class CatalogController
         }
 
         return $renderedRows;
+    }
+
+    private function canLazyResolveCover(array $row): bool
+    {
+        $formatsJson = $row['formats_json'] ?? null;
+        if (!is_string($formatsJson) || trim($formatsJson) === '') {
+            return false;
+        }
+
+        $formats = json_decode($formatsJson, true);
+        if (!is_array($formats)) {
+            return false;
+        }
+
+        foreach (array_keys($formats) as $format) {
+            $normalized = strtolower(trim((string) $format));
+            if ($normalized === 'epub' || $normalized === 'cbz') {
+                return true;
+            }
+        }
+
+        foreach ($formats as $path) {
+            if (!is_string($path)) {
+                continue;
+            }
+
+            $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+            if ($extension === 'epub' || $extension === 'cbz') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function resolveCurrentCatalogUrl(array $server): string

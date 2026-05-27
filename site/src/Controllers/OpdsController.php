@@ -3,6 +3,7 @@
 namespace Calibre\Controllers;
 
 use Calibre\Http\HttpException;
+use Calibre\Http\AccelRedirect;
 use Calibre\Services\OpdsAssetService;
 use Calibre\Services\OpdsCacheService;
 use Calibre\Services\OpdsService;
@@ -247,6 +248,15 @@ final class OpdsController
 
         if ($requestMethod === 'HEAD') {
             exit;
+        }
+
+        $internalUri = AccelRedirect::internalUriFor((string) ($asset['path'] ?? ''), [
+            '/__bookslib_internal/books' => $this->opdsService->getLibraryPath(),
+            '/__bookslib_internal/thumb' => $this->opdsService->getThumbDir(),
+            '/__bookslib_internal/legacy-thumb' => $this->appRoot . DIRECTORY_SEPARATOR . 'thumb',
+        ]);
+        if ($internalUri !== null) {
+            AccelRedirect::send($internalUri);
         }
 
         $this->streamFile((string) ($asset['path'] ?? ''));

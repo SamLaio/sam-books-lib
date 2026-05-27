@@ -5,6 +5,11 @@ declare(strict_types=1);
 require_once __DIR__ . '/bootstrap.php';
 
 use Calibre\Controllers\OpdsController;
+use Calibre\Http\AccelRedirect;
+use Calibre\Http\HttpException;
+use Calibre\LibraryIndex;
+use Calibre\ScanService;
+use Calibre\Services\OpdsAssetService;
 use Calibre\Services\AuthService;
 
 /**
@@ -46,6 +51,133 @@ function logOpdsAuthEvent(string $message): void
 {
     $logPath = __DIR__ . '/data/opds-auth.log';
     @file_put_contents($logPath, '[' . gmdate(DATE_ATOM) . '] ' . $message . PHP_EOL, FILE_APPEND);
+}
+
+function buildOpdsAttachmentDisposition(string $name): string
+{
+    $fallback = preg_replace('/[^A-Za-z0-9._ -]/', '_', $name);
+    if (!is_string($fallback)) {
+        $fallback = '';
+    }
+    $fallback = trim(preg_replace('/\s+/', ' ', $fallback) ?? '');
+    if ($fallback === '' || $fallback === '.' || $fallback === '..') {
+        $fallback = 'download.bin';
+    }
+
+    return 'attachment; filename="' . addcslashes($fallback, "\"\\")
+        . '"; filename*=UTF-8\'\'' . rawurlencode($name);
+}
+
+function streamOpdsAsset(array $asset, string $requestMethod, bool $attachment, ScanService $scanService): void
+{
+    header('Content-Type: ' . (string) ($asset['mime_type'] ?? 'application/octet-stream'));
+    header('Content-Length: ' . (string) ((int) ($asset['size'] ?? 0)));
+    header('X-Content-Type-Options: nosniff');
+
+    if ($attachment) {
+        header('Content-Disposition: ' . buildOpdsAttachmentDisposition((string) ($asset['name'] ?? 'download.bin')));
+        header('Cache-Control: private, max-age=3600');
+    } else {
+        header('Cache-Control: public, max-age=3600');
+    }
+
+    if ($requestMethod === 'HEAD') {
+        exit;
+    }
+
+    $internalUri = AccelRedirect::internalUriFor((string) ($asset['path'] ?? ''), [
+        '/__bookslib_internal/books' => $scanService->getLibraryPath(),
+        '/__bookslib_internal/thumb' => $scanService->getThumbDir(),
+        '/__bookslib_internal/legacy-thumb' => __DIR__ . DIRECTORY_SEPARATOR . 'thumb',
+    ]);
+    if ($internalUri !== null) {
+        AccelRedirect::send($internalUri);
+    }
+
+    $handle = fopen((string) ($asset['path'] ?? ''), 'rb');
+    if ($handle === false) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo "Cannot open file.\n";
+        exit;
+    }
+
+    while (!feof($handle)) {
+        $chunk = fread($handle, 8192);
+        if ($chunk === false) {
+            fclose($handle);
+            http_response_code(500);
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo "Cannot read file.\n";
+            exit;
+        }
+
+        echo $chunk;
+    }
+
+    fclose($handle);
+    exit;
+}
+
+function handleOpdsAssetShortcut(array $server, array $query, AuthService $authService): void
+{
+    $requestMethod = strtoupper((string) ($server['REQUEST_METHOD'] ?? 'GET'));
+    if (!in_array($requestMethod, ['GET', 'HEAD'], true)) {
+        http_response_code(405);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo "Method not allowed.\n";
+        exit;
+    }
+
+    $bookId = filter_var($query['id'] ?? null, FILTER_VALIDATE_INT, [
+        'options' => ['min_range' => 1],
+    ]);
+    if ($bookId === false || $bookId === null) {
+        http_response_code(400);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo "Invalid book id.\n";
+        exit;
+    }
+
+    $scanService = new ScanService(__DIR__);
+    $index = new LibraryIndex($scanService->getSqlitePath());
+    try {
+        $user = null;
+        $userId = filter_var($server['OPDS_AUTH_USER_ID'] ?? null, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+        if ($userId !== false && $userId !== null) {
+            $user = $authService->getUserById((int) $userId);
+        } else {
+            $user = $authService->getCurrentUser();
+        }
+
+        if (!$index->isBookVisible(
+            (int) $bookId,
+            $authService->getUserHiddenAuthors($user),
+            $authService->getUserHiddenTags($user)
+        )) {
+            throw new HttpException(404, 'Book not found.');
+        }
+    } finally {
+        $index->close();
+    }
+
+    $assetService = new OpdsAssetService(__DIR__, $scanService);
+    $feed = strtolower(trim((string) ($query['feed'] ?? 'index')));
+    if ($feed === 'cover') {
+        streamOpdsAsset($assetService->resolveCoverByBookId((int) $bookId), $requestMethod, false, $scanService);
+    }
+
+    if ($feed === 'download') {
+        $format = trim((string) ($query['format'] ?? ''));
+        streamOpdsAsset(
+            $assetService->resolveDownloadByBookId((int) $bookId, $format === '' ? null : $format),
+            $requestMethod,
+            true,
+            $scanService
+        );
+    }
 }
 
 $authService = new AuthService(__DIR__);
@@ -167,6 +299,23 @@ if ($feedSegments !== []) {
 
     if ($resolvedFeed === 'download' && !isset($query['format']) && isset($feedSegments[1])) {
         $query['format'] = urldecode((string) $feedSegments[1]);
+    }
+}
+
+$resolvedFeed = strtolower(trim((string) ($query['feed'] ?? 'index')));
+if (in_array($resolvedFeed, ['cover', 'download'], true)) {
+    try {
+        handleOpdsAssetShortcut($_SERVER, $query, $authService);
+    } catch (HttpException $e) {
+        http_response_code($e->getStatusCode());
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo $e->getMessage();
+        exit;
+    } catch (\Throwable $e) {
+        http_response_code(500);
+        header('Content-Type: text/plain; charset=UTF-8');
+        echo $e->getMessage();
+        exit;
     }
 }
 
