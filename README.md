@@ -4,7 +4,7 @@ SamBooksLib 是一個可自行架設的電子書書庫網站，適合把 Calibre
 
 ## 功能
 
-- 瀏覽書庫、搜尋、排序與分頁。
+- 瀏覽書庫、搜尋、排序、分頁與已讀 / 未讀篩選。
 - 顯示書名、作者、系列、標籤、格式、封面與閱讀狀態。
 - 站內閱讀 `EPUB`、`PDF`、`CBZ`。
 - 下載原始書籍檔案。
@@ -132,7 +132,7 @@ http://你的站台/opds/你的Token
 - `AUTH_EMAIL`：初始管理員 email。
 - `AUTH_SETTINGS_DB_PATH`：帳號設定 SQLite，預設 `data/auth_settings.sqlite`。
 - `MIGRATIONS_DB_PATH`：migration 記錄 SQLite，預設 `data/migrations.sqlite`。
-- `AUTH_SECRET_KEY`：密碼加密 key；未設定時會自動建立 `data/auth.key`。
+- `AUTH_SECRET_KEY`：登入密碼 hash pepper key；未設定時會自動建立 `data/auth.key`，舊版 `data/auth.secret` 只作為相容 fallback。
 
 ### SMTP
 
@@ -149,7 +149,7 @@ SMTP 未完整設定時，寄送書籍功能會停用。
 - `PUID` / `PGID` / `TZ`：容器寫入檔案的使用者、群組與時區。
 - `PHP_PM_*` / `PHP_MEMORY_LIMIT` / `PHP_OPCACHE_ENABLE`：PHP-FPM 與記憶體設定。
 - `BOOKSLIB_X_ACCEL_REDIRECT`：設為 `1` 時，下載與 OPDS 封面 / 檔案會優先交給 nginx `X-Accel-Redirect` 傳送，PHP 只負責授權與路徑檢查。
-- `COMPOSER_ROOT_VERSION`：容器內 Composer 根套件版本，模板目前預設 `1.0.0`。
+- `COMPOSER_ROOT_VERSION`：容器內 Composer 根套件版本，模板目前預設 `v2.6.4`。
 
 下載路徑會限制在 `CALIBRE_LIBRARY_PATH` 之內；`site/data` 內的 SQLite、key、log、lock 等本機狀態檔也會由 nginx 設定拒絕直接存取。
 

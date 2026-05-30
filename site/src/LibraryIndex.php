@@ -330,7 +330,8 @@ class LibraryIndex
         string $sortField = 'title',
         string $sortDirection = 'asc',
         array $hiddenAuthors = [],
-        array $hiddenTags = []
+        array $hiddenTags = [],
+        string $readStatus = 'all'
     ): array
     {
         $limit = max(1, $limit);
@@ -338,13 +339,18 @@ class LibraryIndex
         $query = trim($query);
         $orderByClause = $this->buildOrderByClause($sortField, $sortDirection);
         $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $readStatusFilter = $this->buildReadStatusFilter($readStatus);
 
         if ($query === '') {
+            $whereClauses = array_values(array_filter([
+                $visibilityFilter['sql'] ?? null,
+                $readStatusFilter['sql'] ?? null,
+            ]));
             $sql = 'SELECT ' . $this->getBookListColumns() . '
                  FROM books';
-            if ($visibilityFilter !== null) {
+            if ($whereClauses !== []) {
                 $sql .= '
-                 WHERE ' . $visibilityFilter['sql'];
+                 WHERE ' . implode(' AND ', $whereClauses);
             }
             $sql .= '
                  ORDER BY ' . $orderByClause . '
@@ -352,8 +358,8 @@ class LibraryIndex
             $stmt = $this->pdo->prepare(
                 $sql
             );
-            foreach (($visibilityFilter['params'] ?? []) as $name => $value) {
-                $stmt->bindValue($name, $value, \PDO::PARAM_STR);
+            foreach (array_merge($visibilityFilter['params'] ?? [], $readStatusFilter['params'] ?? []) as $name => $value) {
+                $stmt->bindValue($name, $value, is_int($value) ? \PDO::PARAM_INT : \PDO::PARAM_STR);
             }
             $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
             $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
@@ -367,6 +373,9 @@ class LibraryIndex
         if ($visibilityFilter !== null) {
             $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
         }
+        if ($readStatusFilter !== null) {
+            $whereSql = '(' . $whereSql . ') AND ' . $readStatusFilter['sql'];
+        }
         $stmt = $this->pdo->prepare(
             'SELECT ' . $this->getBookListColumns() . '
              FROM books
@@ -374,8 +383,8 @@ class LibraryIndex
              ORDER BY ' . $orderByClause . '
              LIMIT :limit OFFSET :offset'
         );
-        foreach (array_merge($searchFilter['params'], $visibilityFilter['params'] ?? []) as $name => $value) {
-            $stmt->bindValue($name, $value, \PDO::PARAM_STR);
+        foreach (array_merge($searchFilter['params'], $visibilityFilter['params'] ?? [], $readStatusFilter['params'] ?? []) as $name => $value) {
+            $stmt->bindValue($name, $value, is_int($value) ? \PDO::PARAM_INT : \PDO::PARAM_STR);
         }
         $stmt->bindValue(':limit', $limit, \PDO::PARAM_INT);
         $stmt->bindValue(':offset', $offset, \PDO::PARAM_INT);
@@ -384,21 +393,26 @@ class LibraryIndex
         return $stmt->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
-    public function countSearchResults(string $query, array $hiddenAuthors = [], array $hiddenTags = []): int
+    public function countSearchResults(string $query, array $hiddenAuthors = [], array $hiddenTags = [], string $readStatus = 'all'): int
     {
         $query = trim($query);
         $visibilityFilter = $this->buildVisibilityFilter($hiddenAuthors, $hiddenTags);
+        $readStatusFilter = $this->buildReadStatusFilter($readStatus);
         if ($query === '') {
-            if ($visibilityFilter === null) {
+            if ($visibilityFilter === null && $readStatusFilter === null) {
                 return $this->countBooks();
             }
 
+            $whereClauses = array_values(array_filter([
+                $visibilityFilter['sql'] ?? null,
+                $readStatusFilter['sql'] ?? null,
+            ]));
             $stmt = $this->pdo->prepare(
                 'SELECT COUNT(*)
                  FROM books
-                 WHERE ' . $visibilityFilter['sql']
+                 WHERE ' . implode(' AND ', $whereClauses)
             );
-            $stmt->execute($visibilityFilter['params']);
+            $stmt->execute(array_merge($visibilityFilter['params'] ?? [], $readStatusFilter['params'] ?? []));
 
             return (int) $stmt->fetchColumn();
         }
@@ -408,12 +422,15 @@ class LibraryIndex
         if ($visibilityFilter !== null) {
             $whereSql = '(' . $whereSql . ') AND ' . $visibilityFilter['sql'];
         }
+        if ($readStatusFilter !== null) {
+            $whereSql = '(' . $whereSql . ') AND ' . $readStatusFilter['sql'];
+        }
         $stmt = $this->pdo->prepare(
             'SELECT COUNT(*)
              FROM books
              WHERE ' . $whereSql
         );
-        $stmt->execute(array_merge($searchFilter['params'], $visibilityFilter['params'] ?? []));
+        $stmt->execute(array_merge($searchFilter['params'], $visibilityFilter['params'] ?? [], $readStatusFilter['params'] ?? []));
 
         return (int) $stmt->fetchColumn();
     }
@@ -1233,6 +1250,30 @@ class LibraryIndex
             . ' OR tag LIKE ' . $placeholder . ' COLLATE NOCASE'
             . ' OR series LIKE ' . $placeholder . ' COLLATE NOCASE'
             . ' OR isbn LIKE ' . $placeholder . ' COLLATE NOCASE)';
+    }
+
+    private function buildReadStatusFilter(string $readStatus): ?array
+    {
+        $normalized = strtolower(trim($readStatus));
+        if ($normalized === 'read') {
+            return [
+                'sql' => 'is_read = :read_status_filter',
+                'params' => [
+                    ':read_status_filter' => 1,
+                ],
+            ];
+        }
+
+        if ($normalized === 'unread') {
+            return [
+                'sql' => 'is_read = :read_status_filter',
+                'params' => [
+                    ':read_status_filter' => 0,
+                ],
+            ];
+        }
+
+        return null;
     }
 
     private function buildVisibilityFilter(array $hiddenAuthors, array $hiddenTags): ?array

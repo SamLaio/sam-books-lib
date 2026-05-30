@@ -6,12 +6,14 @@ final class CatalogRequest
 {
     public const PER_PAGE_OPTIONS = [20, 50, 100, 500];
     public const ALLOWED_SORT_FIELDS = ['is_read', 'title', 'author', 'series', 'added_at'];
+    public const READ_STATUS_OPTIONS = ['all', 'unread', 'read'];
 
     private string $query;
     private int $perPage;
     private int $requestedPage;
     private string $sortField;
     private string $sortDirection;
+    private string $readStatus;
     private bool $rebuildRequested;
     private bool $coverRebuildRequested;
 
@@ -21,6 +23,7 @@ final class CatalogRequest
         int $requestedPage,
         string $sortField,
         string $sortDirection,
+        string $readStatus,
         bool $rebuildRequested,
         bool $coverRebuildRequested
     ) {
@@ -29,6 +32,7 @@ final class CatalogRequest
         $this->requestedPage = $requestedPage;
         $this->sortField = $sortField;
         $this->sortDirection = $sortDirection;
+        $this->readStatus = $readStatus;
         $this->rebuildRequested = $rebuildRequested;
         $this->coverRebuildRequested = $coverRebuildRequested;
     }
@@ -53,6 +57,7 @@ final class CatalogRequest
         $requestedPage = max(1, (int) ($source['page'] ?? 1));
         $sortField = self::normalizeSortField((string) ($source['sort'] ?? $defaultSortField));
         $sortDirection = self::normalizeSortDirection((string) ($source['direction'] ?? $defaultSortDirection));
+        $readStatus = self::normalizeReadStatus((string) ($source['read_status'] ?? 'all'));
         $action = trim((string) ($post['action'] ?? ''));
         $rebuildRequested = $requestMethod === 'POST' && $action === 'rebuild';
         $coverRebuildRequested = $requestMethod === 'POST' && $action === 'rebuild_cover';
@@ -63,6 +68,7 @@ final class CatalogRequest
             $requestedPage,
             $sortField,
             $sortDirection,
+            $readStatus,
             $rebuildRequested,
             $coverRebuildRequested
         );
@@ -93,6 +99,13 @@ final class CatalogRequest
         return strtolower($sortDirection) === 'desc' ? 'desc' : 'asc';
     }
 
+    public static function normalizeReadStatus(string $readStatus): string
+    {
+        $normalized = strtolower(trim($readStatus));
+
+        return in_array($normalized, self::READ_STATUS_OPTIONS, true) ? $normalized : 'all';
+    }
+
     public function getQuery(): string
     {
         return $this->query;
@@ -116,6 +129,11 @@ final class CatalogRequest
     public function getSortDirection(): string
     {
         return $this->sortDirection;
+    }
+
+    public function getReadStatus(): string
+    {
+        return $this->readStatus;
     }
 
     public function isRebuildRequested(): bool

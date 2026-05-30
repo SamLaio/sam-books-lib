@@ -8,13 +8,15 @@ final class CatalogUrlGenerator
     private int $perPage;
     private string $sortField;
     private string $sortDirection;
+    private string $readStatus;
 
-    public function __construct(string $query, int $perPage, string $sortField, string $sortDirection)
+    public function __construct(string $query, int $perPage, string $sortField, string $sortDirection, string $readStatus = 'all')
     {
         $this->query = $query;
         $this->perPage = $perPage;
         $this->sortField = CatalogRequest::normalizeSortField($sortField);
         $this->sortDirection = CatalogRequest::normalizeSortDirection($sortDirection);
+        $this->readStatus = CatalogRequest::normalizeReadStatus($readStatus);
     }
 
     public function page(int $page): string
@@ -69,6 +71,7 @@ final class CatalogUrlGenerator
             'per_page' => $this->perPage,
             'sort' => $this->sortField,
             'direction' => $this->sortDirection,
+            'read_status' => $this->readStatus,
             'page' => 1,
         ];
 
@@ -78,6 +81,7 @@ final class CatalogUrlGenerator
 
         $params['sort'] = CatalogRequest::normalizeSortField((string) $params['sort']);
         $params['direction'] = CatalogRequest::normalizeSortDirection((string) $params['direction']);
+        $params['read_status'] = CatalogRequest::normalizeReadStatus((string) $params['read_status']);
         $params['page'] = max(1, (int) $params['page']);
         $params['per_page'] = in_array((int) $params['per_page'], CatalogRequest::PER_PAGE_OPTIONS, true)
             ? (int) $params['per_page']
@@ -92,6 +96,10 @@ final class CatalogUrlGenerator
 
         if ($params['page'] <= 1) {
             unset($params['page']);
+        }
+
+        if ($params['read_status'] === 'all') {
+            unset($params['read_status']);
         }
 
         $queryString = http_build_query($params);

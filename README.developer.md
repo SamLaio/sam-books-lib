@@ -203,10 +203,12 @@ find site/data -maxdepth 1 -printf '%M %u %g %p\n'
 
 - `site/index.php`：書庫列表。
 - `site/book.php`：書籍詳情。
+- `site/captcha.php`：登入圖形驗證碼。
 - `site/download.php`：下載原始檔。
 - `site/send.php`：排程寄送書籍。
 - `site/read.php`：已讀狀態 API。
 - `site/theme.php`：主題偏好。
+- `site/scan_request.php`：前端手動重建索引 API。
 
 帳號與管理：
 
@@ -254,6 +256,8 @@ Index / Scan：
 - `Calibre\ScanService`
 - `Calibre\ScanLauncher`
 - `Calibre\Services\ScanScheduleService`
+- `Calibre\Controllers\ScanRequestController`
+- `Calibre\Controllers\ScanTitleResolver`
 
 Auth：
 
@@ -266,6 +270,7 @@ Auth：
 - `Calibre\Controllers\AuthSettingsController`
 - `Calibre\Controllers\AdminSettingsController`
 - `Calibre\Controllers\MagicLoginController`
+- `Calibre\Controllers\ThemePreferenceController`
 
 Reader：
 
@@ -334,6 +339,7 @@ worker 主要負責：
 - 書名與作者關鍵字。
 - 格式關鍵字：`pdf`、`epub`、`cbz`，以及 `pdb` 對應 `pdf`。
 - 基本布林語法：`and`、`or`、`+`、`-`、`||`、括號。
+- 已讀狀態篩選：`all`、`unread`、`read`。
 - 依環境能力使用 SQLite FTS 或 fallback 查詢。
 
 排序欄位目前包含：
@@ -379,7 +385,7 @@ OPDS URL 生成優先使用 `SITE_BASE_URL`。修改相關邏輯時，請確認 
 - 入口：`site/login.php`。
 - 驗證碼：`LoginCaptchaService`。
 - 帳密與使用者狀態：`AuthService`。
-- 密碼與敏感設定依 `AUTH_SECRET_KEY` 加密；未設定時會建立 `data/auth.key`，舊版 `data/auth.secret` 會作為相容 fallback。
+- 登入密碼會使用 `AUTH_SECRET_KEY` 作為 hash pepper；未設定時會建立 `data/auth.key`，舊版 `data/auth.secret` 會作為相容 fallback。
 
 登入失敗規則：
 
@@ -436,7 +442,7 @@ docker compose exec -T sam-books-lib sh -lc 'php -r '\''require "/var/www/html/b
 4. `migrate.php status` 無失敗。
 5. `login.php` 可登入，驗證碼錯誤與密碼錯誤都會累計失敗次數。
 6. 魔術登入啟用時可建立 QR code，停用時按鈕消失且 API 回 404。
-7. `index.php` 可搜尋、排序、分頁與切換已讀狀態。
+7. `index.php` 可搜尋、排序、分頁、已讀 / 未讀篩選與切換已讀狀態。
 8. `book.php` 可顯示書籍詳情。
 9. `reader.php` 可讀 EPUB、PDF、CBZ。
 10. `download.php` 只能下載書庫根目錄內的檔案。

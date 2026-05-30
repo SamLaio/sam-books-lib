@@ -35,7 +35,7 @@ return [
     'common.not_provided' => 'Not provided',
 
     'layout.default_title' => 'Calibre Library Index',
-    'layout.search_help' => 'Search fields: title, tag, author, series, isbn. Supports <code>+</code> (AND), <code>||</code> (OR), <code>-</code> (exclude), and parentheses <code>()</code>.',
+    'layout.search_help' => 'Search fields: title, tag, author, series, isbn. Supports <code>+</code> (AND), <code>||</code> (OR), <code>-</code> (exclude), and parentheses <code>()</code>. Use the status menu to filter read / unread books.',
     'layout.logged_in' => 'Signed in as: {username}',
     'layout.account_settings' => 'Account Settings',
     'layout.admin_settings' => 'Admin Settings',
@@ -97,6 +97,10 @@ return [
     'auth.label.new_user_password' => 'New user password',
 
     'catalog.search_placeholder' => 'Enter keywords, e.g. (novel +taiwan) -romance || history',
+    'catalog.read_status_filter' => 'Reading status',
+    'catalog.read_status_all' => 'All',
+    'catalog.read_status_unread' => 'Unread',
+    'catalog.read_status_read' => 'Read',
     'catalog.read' => 'Read',
     'catalog.title' => 'Title',
     'catalog.author' => 'Author',

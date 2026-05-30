@@ -35,7 +35,7 @@ return [
     'common.not_provided' => '未提供',
 
     'layout.default_title' => 'Calibre 書庫索引',
-    'layout.search_help' => '搜尋欄位：書名、tag、作者、系列、isbn，支援 <code>+</code>（AND）、<code>||</code>（OR）、<code>-</code>（排除）與括號 <code>()</code>',
+    'layout.search_help' => '搜尋欄位：書名、tag、作者、系列、isbn，支援 <code>+</code>（AND）、<code>||</code>（OR）、<code>-</code>（排除）與括號 <code>()</code>；可用狀態選單篩選已讀 / 未讀',
     'layout.logged_in' => '目前登入：{username}',
     'layout.account_settings' => '帳號設定',
     'layout.admin_settings' => '管理員設定',
@@ -97,6 +97,10 @@ return [
     'auth.label.new_user_password' => '新使用者密碼',
 
     'catalog.search_placeholder' => '輸入關鍵字，例如：(小說 +台灣) -言情 || 歷史',
+    'catalog.read_status_filter' => '閱讀狀態',
+    'catalog.read_status_all' => '全部',
+    'catalog.read_status_unread' => '未讀',
+    'catalog.read_status_read' => '已讀',
     'catalog.read' => '已讀',
     'catalog.title' => '書名',
     'catalog.author' => '作者',

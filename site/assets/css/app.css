@@ -127,6 +127,11 @@ input[type="search"] {
   flex: 1 1 420px;
 }
 
+.read-status-select {
+  flex: 0 0 112px;
+  min-width: 112px;
+}
+
 input[type="checkbox"] {
   appearance: none;
   display: inline-grid;
@@ -1997,6 +2002,14 @@ body[data-theme="dark"] .admin-job-mobile-card {
 
   .meta__line--search {
     display: none;
+  }
+
+  .search-form {
+    align-items: stretch;
+  }
+
+  .read-status-select {
+    flex: 1 1 120px;
   }
 
   .admin-tabs__nav {

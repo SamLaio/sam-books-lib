@@ -55,7 +55,8 @@ final class CatalogController
             $request->getQuery(),
             $request->getPerPage(),
             $request->getSortField(),
-            $request->getSortDirection()
+            $request->getSortDirection(),
+            $request->getReadStatus()
         );
 
         $viewData = [
@@ -66,6 +67,8 @@ final class CatalogController
             'perPageOptions' => CatalogRequest::PER_PAGE_OPTIONS,
             'sortField' => $request->getSortField(),
             'sortDirection' => $request->getSortDirection(),
+            'readStatus' => $request->getReadStatus(),
+            'readStatusOptions' => $this->buildReadStatusOptions(),
             'searchAction' => 'index.php',
             'rebuildAction' => 'index.php',
             'scanRequestAction' => 'scan_request.php',
@@ -161,6 +164,9 @@ final class CatalogController
                 $redirectQuery['per_page'] = $request->getPerPage();
                 $redirectQuery['sort'] = $request->getSortField();
                 $redirectQuery['direction'] = $request->getSortDirection();
+                if ($request->getReadStatus() !== 'all') {
+                    $redirectQuery['read_status'] = $request->getReadStatus();
+                }
                 $redirectQuery['scan_notice'] = $notice;
 
                 $location = 'index.php';
@@ -182,7 +188,12 @@ final class CatalogController
             }
 
             $index = new LibraryIndex($scanService->getSqlitePath());
-            $totalRows = $index->countSearchResults($request->getQuery(), $hiddenAuthors, $hiddenTags);
+            $totalRows = $index->countSearchResults(
+                $request->getQuery(),
+                $hiddenAuthors,
+                $hiddenTags,
+                $request->getReadStatus()
+            );
             $totalPages = max(1, (int) ceil($totalRows / $request->getPerPage()));
             $currentPage = min($request->getRequestedPage(), $totalPages);
             $rows = $index->getBooksPage(
@@ -192,7 +203,8 @@ final class CatalogController
                 $request->getSortField(),
                 $request->getSortDirection(),
                 $hiddenAuthors,
-                $hiddenTags
+                $hiddenTags,
+                $request->getReadStatus()
             );
             $lastRebuildAt = $this->formatDateTimeDisplay($index->getLastRebuildAt());
 
@@ -244,6 +256,24 @@ final class CatalogController
         }
 
         echo $this->view->renderPage('catalog/index', $viewData);
+    }
+
+    private function buildReadStatusOptions(): array
+    {
+        return [
+            [
+                'value' => 'all',
+                'label' => Lang::t('catalog.read_status_all'),
+            ],
+            [
+                'value' => 'unread',
+                'label' => Lang::t('catalog.read_status_unread'),
+            ],
+            [
+                'value' => 'read',
+                'label' => Lang::t('catalog.read_status_read'),
+            ],
+        ];
     }
 
     private function buildRows(

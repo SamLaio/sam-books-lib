@@ -40,6 +40,18 @@ $escape = static function ($value): string {
           spellcheck="false"
           enterkeyhint="search"
         >
+        <select
+          class="read-status-select"
+          name="read_status"
+          aria-label="<?= $escape($t('catalog.read_status_filter')) ?>"
+          title="<?= $escape($t('catalog.read_status_filter')) ?>"
+        >
+          <?php foreach ($readStatusOptions as $option): ?>
+            <option value="<?= $escape($option['value']) ?>" <?= $option['value'] === $readStatus ? 'selected' : '' ?>>
+              <?= $escape($option['label']) ?>
+            </option>
+          <?php endforeach; ?>
+        </select>
         <a class="btn secondary search-clear-link" href="<?= $escape($clearUrl) ?>"><?= $escape($t('common.clear')) ?></a>
         <button type="submit"><?= $escape($t('common.search')) ?></button>
         <input type="hidden" name="per_page" value="<?= $perPage ?>">
@@ -82,6 +94,7 @@ $escape = static function ($value): string {
               <input type="hidden" name="per_page" value="<?= $perPage ?>">
               <input type="hidden" name="sort" value="<?= $escape($sortField) ?>">
               <input type="hidden" name="direction" value="<?= $escape($sortDirection) ?>">
+              <input type="hidden" name="read_status" value="<?= $escape($readStatus) ?>">
               <input
                 id="jump-page-top"
                 class="page-jump-input"
@@ -261,6 +274,7 @@ $escape = static function ($value): string {
               <input type="hidden" name="per_page" value="<?= $perPage ?>">
               <input type="hidden" name="sort" value="<?= $escape($sortField) ?>">
               <input type="hidden" name="direction" value="<?= $escape($sortDirection) ?>">
+              <input type="hidden" name="read_status" value="<?= $escape($readStatus) ?>">
               <input
                 id="jump-page"
                 class="page-jump-input"
