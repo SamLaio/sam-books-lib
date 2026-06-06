@@ -133,6 +133,15 @@ func (w *worker) tick(ctx context.Context) (bool, error) {
 		return false, err
 	}
 
+	dueBeforeUnix := time.Now().Unix()
+	sendCount, err := w.runDueSendBookJobs(ctx, db, dueBeforeUnix)
+	if err != nil {
+		return sendCount > 0, err
+	}
+	if sendCount > 0 {
+		return true, nil
+	}
+
 	j, err := w.reserveDueJob(db)
 	if err != nil {
 		return false, err
@@ -141,17 +150,33 @@ func (w *worker) tick(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	fmt.Printf("books-worker: reserved job id=%d action=%s source=%s\n", j.ID, j.Action, j.Source)
-	result, runErr := w.runJob(ctx, db, *j)
-	if runErr != nil {
-		_ = markFailed(db, j.ID, runErr)
-		return true, runErr
+	return true, w.runReservedJob(ctx, db, *j)
+}
+
+func (w *worker) runDueSendBookJobs(ctx context.Context, db *sql.DB, dueBeforeUnix int64) (int, error) {
+	processed := 0
+	var firstErr error
+	for {
+		next, err := w.reserveDueJobByActionDueAt(db, "send_book", dueBeforeUnix)
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			break
+		}
+		if next == nil {
+			break
+		}
+
+		if err := w.runReservedJob(ctx, db, *next); err != nil && firstErr == nil {
+			firstErr = err
+		}
+		processed++
 	}
-	if err := markDone(db, j.ID, result); err != nil {
-		return true, err
+	if processed > 1 {
+		fmt.Printf("books-worker: processed send_book batch count=%d\n", processed)
 	}
-	fmt.Printf("books-worker: done job id=%d action=%s\n", j.ID, j.Action)
-	return true, nil
+	return processed, firstErr
 }
 
 func (w *worker) reconcileRunningJobs(db *sql.DB) error {
@@ -263,19 +288,35 @@ VALUES('rebuild', ?, 'auto', 'pending', ?, NULL)`, runAt, time.Now().Format(time
 }
 
 func (w *worker) reserveDueJob(db *sql.DB) (*job, error) {
+	return w.reserveDueJobMatching(db, "", time.Now().Unix())
+}
+
+func (w *worker) reserveDueJobByActionDueAt(db *sql.DB, action string, dueBeforeUnix int64) (*job, error) {
+	return w.reserveDueJobMatching(db, strings.ToLower(strings.TrimSpace(action)), dueBeforeUnix)
+}
+
+func (w *worker) reserveDueJobMatching(db *sql.DB, action string, dueBeforeUnix int64) (*job, error) {
 	tx, err := db.Begin()
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
+	actionFilter := ""
+	args := []any{dueBeforeUnix, time.Now().Add(-pendingExpireSeconds * time.Second).Unix()}
+	if action != "" {
+		actionFilter = "  AND action = ?\n"
+		args = append(args, action)
+	}
+
 	row := tx.QueryRow(`SELECT id, action, run_at, source, COALESCE(payload, '')
 FROM scan_jobs
 WHERE status = 'pending'
   AND CAST(COALESCE(strftime('%s', run_at), '0') AS INTEGER) <= ?
   AND CAST(COALESCE(strftime('%s', run_at), '0') AS INTEGER) >= ?
+`+actionFilter+`
 ORDER BY CASE WHEN source = 'manual' THEN 0 ELSE 1 END ASC, run_at ASC, id ASC
-LIMIT 1`, time.Now().Unix(), time.Now().Add(-pendingExpireSeconds*time.Second).Unix())
+LIMIT 1`, args...)
 
 	var j job
 	var payloadRaw string
@@ -318,6 +359,20 @@ WHERE id = ? AND status = 'pending'`,
 		return nil, err
 	}
 	return &j, nil
+}
+
+func (w *worker) runReservedJob(ctx context.Context, db *sql.DB, j job) error {
+	fmt.Printf("books-worker: reserved job id=%d action=%s source=%s\n", j.ID, j.Action, j.Source)
+	result, runErr := w.runJob(ctx, db, j)
+	if runErr != nil {
+		_ = markFailed(db, j.ID, runErr)
+		return runErr
+	}
+	if err := markDone(db, j.ID, result); err != nil {
+		return err
+	}
+	fmt.Printf("books-worker: done job id=%d action=%s\n", j.ID, j.Action)
+	return nil
 }
 
 func (w *worker) runJob(ctx context.Context, db *sql.DB, j job) (map[string]any, error) {
