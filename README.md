@@ -21,6 +21,38 @@ SamBooksLib 是一個可自行架設的電子書書庫網站，適合把 Calibre
 
 最建議掛載 Calibre 書庫資料夾，也就是包含 `metadata.db` 的那個目錄。SamBooksLib 也會嘗試掃描一般資料夾中的 `epub`、`pdf`、`cbz` 檔案，但 Calibre 書庫能提供比較完整的作者、標籤、系列與封面資料。
 
+## Docker Hub image
+
+預建 Docker image 發布在 Docker Hub：
+
+- Docker Hub：<https://hub.docker.com/repository/docker/f85122/sam-books-lib>
+- Image：`f85122/sam-books-lib`
+- Latest tag：`f85122/sam-books-lib:latest`
+
+可以先手動拉取 image：
+
+```bash
+docker pull f85122/sam-books-lib:latest
+```
+
+如果要在 `docker-compose.yml` 使用 Docker Hub image，請把服務中的 `build` 與 `pull_policy: never` 移除，並改用：
+
+```yml
+image: f85122/sam-books-lib:latest
+```
+
+同時不要掛載整個 `./site` 到 `/var/www/html`，否則容器內的預建程式會被本機檔案覆蓋。正式部署通常只需要保留資料目錄與書庫掛載，例如：
+
+```yml
+volumes:
+  - type: bind
+    source: ./site/data
+    target: /var/www/html/data
+  - type: bind
+    source: /path/to/your/CalibreLib
+    target: /books
+```
+
 ## 快速開始
 
 1. 複製 Docker Compose 樣板：
