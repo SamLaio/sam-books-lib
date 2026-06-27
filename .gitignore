@@ -6,6 +6,9 @@
 /site/data/**
 *.yml
 !docker-compose.template.yml
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 site/vendor/*
 pushDocker.bat
 read/
