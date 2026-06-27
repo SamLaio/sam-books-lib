@@ -4,6 +4,7 @@
 .vscode/
 /data/**
 /site/data/**
+/site/build_info.json
 *.yml
 !docker-compose.template.yml
 !.github/

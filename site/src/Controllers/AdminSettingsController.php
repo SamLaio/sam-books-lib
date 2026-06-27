@@ -396,6 +396,11 @@ final class AdminSettingsController
 
     private function buildVersionSignature(): string
     {
+        $buildInfoSignature = $this->buildInfoVersionSignature();
+        if ($buildInfoSignature !== null) {
+            return $buildInfoSignature;
+        }
+
         $files = [
             $this->appRoot . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'Controllers' . DIRECTORY_SEPARATOR . 'AdminSettingsController.php',
             $this->appRoot . DIRECTORY_SEPARATOR . 'views' . DIRECTORY_SEPARATOR . 'auth' . DIRECTORY_SEPARATOR . 'admin_settings.php',
@@ -466,6 +471,37 @@ final class AdminSettingsController
         return Lang::t('admin.version_signature', [
             'time' => date('Y-m-d H:i:s', $latestMtime > 0 ? $latestMtime : time()),
             'hash' => substr(sha1($fingerprint), 0, 12),
+        ]);
+    }
+
+    private function buildInfoVersionSignature(): ?string
+    {
+        $buildInfoPath = $this->appRoot . DIRECTORY_SEPARATOR . 'build_info.json';
+        if (!is_file($buildInfoPath)) {
+            return null;
+        }
+
+        $raw = @file_get_contents($buildInfoPath);
+        if ($raw === false || trim($raw) === '') {
+            return null;
+        }
+
+        $info = json_decode($raw, true);
+        if (!is_array($info)) {
+            return null;
+        }
+
+        $sourceHash = trim((string) ($info['source_hash'] ?? ''));
+        if ($sourceHash === '') {
+            return null;
+        }
+
+        $generatedAt = trim((string) ($info['generated_at'] ?? ''));
+        $timestamp = $generatedAt !== '' ? strtotime($generatedAt) : false;
+
+        return Lang::t('admin.version_signature', [
+            'time' => date('Y-m-d H:i:s', $timestamp !== false ? $timestamp : time()),
+            'hash' => substr($sourceHash, 0, 12),
         ]);
     }
 }
