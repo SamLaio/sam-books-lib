@@ -75,7 +75,7 @@ services:
       - PHP_MEMORY_LIMIT=64M
       - PHP_OPCACHE_ENABLE=0
       - BOOKSLIB_X_ACCEL_REDIRECT=1
-      - COMPOSER_ROOT_VERSION=v2.6.5
+      - COMPOSER_ROOT_VERSION=v2.6.6
     volumes:
       # 掛載站台程式碼，讓修正不需要重建 image 即可套用
       - type: bind

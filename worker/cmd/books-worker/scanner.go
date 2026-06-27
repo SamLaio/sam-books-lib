@@ -80,15 +80,15 @@ func (w *worker) runRebuild(ctx context.Context, db *sql.DB, j job, started time
 	w.appendLog(logPath, fmt.Sprintf("[%s] Go scan completed saved=%d", time.Now().Format(time.RFC3339), saved))
 
 	return map[string]any{
-		"action":           j.Action,
-		"engine":           "go",
-		"library_path":     libraryPath,
-		"sqlite_path":      sqlitePath,
-		"thumb_dir":        thumbDir,
-		"scanned_books":    stats.Scanned,
-		"saved_books":      saved,
+		"action":            j.Action,
+		"engine":            "go",
+		"library_path":      libraryPath,
+		"sqlite_path":       sqlitePath,
+		"thumb_dir":         thumbDir,
+		"scanned_books":     stats.Scanned,
+		"saved_books":       saved,
 		"backfilled_covers": stats.BackfilledCovers,
-		"duration_seconds": int(time.Since(started).Seconds()),
+		"duration_seconds":  int(time.Since(started).Seconds()),
 	}, nil
 }
 
@@ -310,7 +310,7 @@ ORDER BY b.title`)
 			"source_type":           "db",
 			"tag":                   normalizeCSV(tags.String),
 			"series":                series.String,
-			"isbn":                  isbn.String,
+			"isbn":                  normalizeISBN(isbn.String),
 			"publisher":             normalizeCSV(publishers.String),
 			"language":              normalizeCSV(languages.String),
 			"description":           normalizeDescription(description.String),
@@ -1107,7 +1107,7 @@ func parseOPFMetadata(raw string) map[string]any {
 					result["identifier"] = text
 				}
 				if result["isbn"] == nil && strings.Contains(strings.ToLower(text), "isbn") {
-					result["isbn"] = text
+					result["isbn"] = normalizeISBN(text)
 				}
 				if result["uuid"] == nil && strings.Contains(strings.ToLower(text), "uuid") {
 					result["uuid"] = strings.TrimPrefix(text, "urn:uuid:")
@@ -1271,6 +1271,8 @@ func normalizeCSV(value string) string {
 var tagRE = regexp.MustCompile(`<[^>]+>`)
 var brRE = regexp.MustCompile(`(?i)<\s*br\s*/?>`)
 var pRE = regexp.MustCompile(`(?i)<\s*/p\s*>`)
+var isbnCleanRE = regexp.MustCompile(`[^0-9Xx]`)
+var isbnValueRE = regexp.MustCompile(`^(?:\d{9}[\dXx]|\d{13})$`)
 
 func normalizeDescription(value string) string {
 	value = strings.TrimSpace(value)
@@ -1290,6 +1292,18 @@ func normalizeDate(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" || strings.HasPrefix(value, "0101-") {
 		return ""
+	}
+	return value
+}
+
+func normalizeISBN(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	normalized := isbnCleanRE.ReplaceAllString(value, "")
+	if isbnValueRE.MatchString(normalized) {
+		return strings.ToUpper(normalized)
 	}
 	return value
 }

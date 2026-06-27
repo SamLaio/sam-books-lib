@@ -149,7 +149,7 @@ SMTP 未完整設定時，寄送書籍功能會停用。
 - `PUID` / `PGID` / `TZ`：容器寫入檔案的使用者、群組與時區。
 - `PHP_PM_*` / `PHP_MEMORY_LIMIT` / `PHP_OPCACHE_ENABLE`：PHP-FPM 與記憶體設定。
 - `BOOKSLIB_X_ACCEL_REDIRECT`：設為 `1` 時，下載與 OPDS 封面 / 檔案會優先交給 nginx `X-Accel-Redirect` 傳送，PHP 只負責授權與路徑檢查。
-- `COMPOSER_ROOT_VERSION`：容器內 Composer 根套件版本，模板目前預設 `v2.6.5`。
+- `COMPOSER_ROOT_VERSION`：容器內 Composer 根套件版本，模板目前預設 `v2.6.6`。
 
 下載路徑會限制在 `CALIBRE_LIBRARY_PATH` 之內；`site/data` 內的 SQLite、key、log、lock 等本機狀態檔也會由 nginx 設定拒絕直接存取。
 

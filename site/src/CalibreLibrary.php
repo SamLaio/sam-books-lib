@@ -231,7 +231,7 @@ class CalibreLibrary
                 'source_type' => 'db',
                 'tag' => $this->normalizeCsvField($row['tags'] ?? ''),
                 'series' => $row['series'] ?? '',
-                'isbn' => $row['isbn'] ?? '',
+                'isbn' => $this->normalizeIsbn($row['isbn'] ?? '') ?? '',
                 'publisher' => $this->normalizeCsvField($row['publishers'] ?? ''),
                 'language' => $this->normalizeCsvField($row['languages'] ?? ''),
                 'description' => $this->normalizeDescription($row['description'] ?? null),
@@ -1248,16 +1248,28 @@ class CalibreLibrary
         }
 
         foreach ($candidates as $candidate) {
-            $normalized = preg_replace('/[^0-9Xx]/', '', $candidate);
-            if ($normalized === null) {
-                continue;
-            }
-            if (preg_match('/^(?:\d{9}[\dXx]|\d{13})$/', $normalized)) {
-                return strtoupper($normalized);
+            $normalized = $this->normalizeIsbn($candidate, false);
+            if ($normalized !== null) {
+                return $normalized;
             }
         }
 
         return null;
+    }
+
+    private function normalizeIsbn($value, bool $preserveInvalid = true): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/[^0-9Xx]/', '', $value);
+        if ($normalized !== null && preg_match('/^(?:\d{9}[\dXx]|\d{13})$/', $normalized)) {
+            return strtoupper($normalized);
+        }
+
+        return $preserveInvalid ? $value : null;
     }
 
     /**
