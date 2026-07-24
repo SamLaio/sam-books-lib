@@ -102,6 +102,7 @@ return [
     'catalog.read_status_unread' => 'Unread',
     'catalog.read_status_read' => 'Read',
     'catalog.read' => 'Read',
+    'catalog.cover' => 'Cover',
     'catalog.title' => 'Title',
     'catalog.author' => 'Author',
     'catalog.tags' => 'Tags',

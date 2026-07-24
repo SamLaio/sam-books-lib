@@ -19,6 +19,7 @@ todo*.txt
 notes*.txt
 memo*.txt
 release*.md
+/release/
 *.log
 *.tmp
 *.bak

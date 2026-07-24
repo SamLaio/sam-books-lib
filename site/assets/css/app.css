@@ -1108,27 +1108,34 @@ th {
 
 th.col-title,
 td.col-title {
-  width: 22%;
+  width: 20%;
+}
+
+th.col-cover,
+td.col-cover {
+  width: 72px;
+  min-width: 72px;
+  text-align: center;
 }
 
 th.col-author,
 td.col-author {
-  width: 15%;
+  width: 14%;
 }
 
 th.col-tag,
 td.col-tag {
-  width: 18%;
+  width: 15%;
 }
 
 th.col-series,
 td.col-series {
-  width: 13%;
+  width: 11%;
 }
 
 th.col-added,
 td.col-added {
-  width: 12%;
+  width: 10%;
 }
 
 th.col-isbn,
@@ -1322,6 +1329,21 @@ td.col-read {
 .mobile-cover-link {
   display: inline-block;
   text-decoration: none;
+}
+
+.catalog-cover {
+  display: block;
+  width: 48px;
+  height: 72px;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid var(--line);
+  background: #f8fafc;
+  margin: 0 auto;
+}
+
+.catalog-cover-link {
+  display: inline-block;
 }
 
 .ellipsis {
@@ -1782,8 +1804,8 @@ td.col-read {
 .cover-hover-preview {
   position: fixed;
   z-index: 1100;
-  width: 110px;
-  min-height: 150px;
+  width: 220px;
+  min-height: 300px;
   border-radius: 10px;
   border: 1px solid var(--line);
   background: #fff;
@@ -1799,7 +1821,7 @@ td.col-read {
 .cover-hover-preview__image {
   display: block;
   width: 100%;
-  max-height: 190px;
+  max-height: 380px;
   object-fit: contain;
   border-radius: 6px;
   background: #f8fafc;
@@ -1819,6 +1841,7 @@ body[data-theme="dark"] th {
 
 body[data-theme="dark"] .book-dialog__meta-item,
 body[data-theme="dark"] .book-dialog__cover,
+body[data-theme="dark"] .catalog-cover,
 body[data-theme="dark"] .cover-hover-preview__image,
 body[data-theme="dark"] .cover-lightbox__image,
 body[data-theme="dark"] .read-online-reader,
@@ -1970,6 +1993,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
   table,
   tr,
   .mobile-cover,
+  .catalog-cover,
   .book-dialog,
   .book-dialog__aside,
   .book-dialog__meta-item,
@@ -2185,8 +2209,13 @@ body[data-theme="dark"] .admin-job-mobile-card {
     width: 100% !important;
   }
 
-  td.col-title {
+  td.col-cover {
     order: 1;
+    display: block;
+  }
+
+  td.col-title {
+    order: 2;
     display: block;
   }
 
@@ -2195,6 +2224,7 @@ body[data-theme="dark"] .admin-job-mobile-card {
     font-weight: 700;
   }
 
+  td.col-cover::before,
   td.col-title::before {
     content: none;
   }
@@ -2224,34 +2254,34 @@ body[data-theme="dark"] .admin-job-mobile-card {
   }
 
   td.col-read {
-    order: 2;
+    order: 3;
     text-align: left;
   }
 
   td.col-author {
-    order: 3;
+    order: 4;
     display: block;
   }
 
   td.col-series {
-    order: 4;
+    order: 5;
   }
 
   td.col-tag {
-    order: 5;
+    order: 6;
     display: block;
   }
 
   td.col-added {
-    order: 6;
-  }
-
-  td.col-isbn {
     order: 7;
   }
 
-  td.col-actions {
+  td.col-isbn {
     order: 8;
+  }
+
+  td.col-actions {
+    order: 9;
   }
 
   td.col-actions::before {

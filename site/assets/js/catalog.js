@@ -1172,14 +1172,14 @@
 
     activeHoverLink = link;
     hoverPreviewImage.src = coverUrl;
-    hoverPreviewImage.alt = `${link.textContent?.trim() || "書籍"} 封面預覽`;
+    hoverPreviewImage.alt = `${link.getAttribute("data-book-title") || link.textContent?.trim() || "書籍"} 封面預覽`;
     hoverPreview.hidden = false;
     positionHoverPreview(event);
   };
 
   hoverPreviewImage.addEventListener("error", hideHoverPreview);
 
-  document.querySelectorAll(".title-link[data-hover-cover-url]").forEach((link) => {
+  document.querySelectorAll(".catalog-cover-link[data-hover-cover-url]").forEach((link) => {
     link.addEventListener("mouseenter", (event) => {
       showHoverPreview(link, event);
     });

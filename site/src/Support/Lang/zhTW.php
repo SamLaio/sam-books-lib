@@ -102,6 +102,7 @@ return [
     'catalog.read_status_unread' => '未讀',
     'catalog.read_status_read' => '已讀',
     'catalog.read' => '已讀',
+    'catalog.cover' => '封面',
     'catalog.title' => '書名',
     'catalog.author' => '作者',
     'catalog.tags' => '標籤',

@@ -129,6 +129,7 @@ $escape = static function ($value): string {
         <thead>
           <tr>
             <th class="col-read"><a class="sort-link" href="<?= $escape($sortHeaders['is_read']['url']) ?>"><?= $sortHeaders['is_read']['label'] . $sortHeaders['is_read']['indicator'] ?></a></th>
+            <th class="col-cover"><?= $escape($t('catalog.cover')) ?></th>
             <th class="col-title"><a class="sort-link" href="<?= $escape($sortHeaders['title']['url']) ?>"><?= $sortHeaders['title']['label'] . $sortHeaders['title']['indicator'] ?></a></th>
             <th class="col-author"><a class="sort-link" href="<?= $escape($sortHeaders['author']['url']) ?>"><?= $sortHeaders['author']['label'] . $sortHeaders['author']['indicator'] ?></a></th>
             <th class="col-tag"><?= $escape($t('catalog.tags')) ?></th>
@@ -141,7 +142,7 @@ $escape = static function ($value): string {
         <tbody>
           <?php if ($rows === []): ?>
             <tr>
-              <td colspan="8" class="empty-row"><?= $escape($t('catalog.empty')) ?></td>
+              <td colspan="9" class="empty-row"><?= $escape($t('catalog.empty')) ?></td>
             </tr>
           <?php else: ?>
             <?php foreach ($rows as $row): ?>
@@ -158,11 +159,11 @@ $escape = static function ($value): string {
                     </label>
                   <?php endif; ?>
                 </td>
-                <td class="col-title" data-label="<?= $escape($t('catalog.title')) ?>">
+                <td class="col-cover" data-label="<?= $escape($t('catalog.cover')) ?>">
                   <?php if (($row['cover_preview_url'] ?? null) !== null): ?>
                     <?php if (($row['details_url'] ?? null) !== null): ?>
                       <a
-                        class="mobile-cover-link"
+                        class="mobile-cover-link catalog-cover-link"
                         href="#book-dialog"
                         data-book-details-url="<?= $escape($row['details_url']) ?>"
                         data-hover-cover-url="<?= $escape($row['cover_preview_url'] ?? '') ?>"
@@ -171,7 +172,7 @@ $escape = static function ($value): string {
                         aria-haspopup="dialog"
                       >
                         <img
-                          class="mobile-cover"
+                          class="mobile-cover catalog-cover"
                           src="<?= $escape($row['cover_preview_url']) ?>"
                           alt="<?= $escape($t('catalog.cover_aria', ['title' => (string) ($row['title'] ?? $t('catalog.book_fallback'))])) ?>"
                           loading="lazy"
@@ -179,19 +180,20 @@ $escape = static function ($value): string {
                       </a>
                     <?php else: ?>
                       <img
-                        class="mobile-cover"
+                        class="mobile-cover catalog-cover"
                         src="<?= $escape($row['cover_preview_url']) ?>"
                         alt="<?= $escape($t('catalog.cover_aria', ['title' => (string) ($row['title'] ?? $t('catalog.book_fallback'))])) ?>"
                         loading="lazy"
                       >
                     <?php endif; ?>
                   <?php endif; ?>
+                </td>
+                <td class="col-title" data-label="<?= $escape($t('catalog.title')) ?>">
                   <?php if (($row['details_url'] ?? null) !== null): ?>
                     <a
                       class="title-link"
                       href="#book-dialog"
                       data-book-details-url="<?= $escape($row['details_url']) ?>"
-                      data-hover-cover-url="<?= $escape($row['cover_preview_url'] ?? '') ?>"
                       data-book-title="<?= $escape($row['title'] ?? '') ?>"
                       aria-haspopup="dialog"
                     ><?= $escape($row['title'] ?? '') ?></a>
