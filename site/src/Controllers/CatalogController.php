@@ -146,7 +146,7 @@ final class CatalogController
             if ($request->isRebuildRequested() || $request->isCoverRebuildRequested()) {
                 $scheduleService = new ScanScheduleService($this->appRoot);
                 if ($request->isCoverRebuildRequested()) {
-                    $scheduled = $scheduleService->enqueueManualAfterAllJobs('rebuild_cover', 60);
+                    $scheduled = $scheduleService->enqueueManual('rebuild_cover', 60);
                     $notice = Lang::t('message.cover_rebuild_queued', [
                         'time' => (string) ($scheduled['run_at'] ?? date('c')),
                     ]);
