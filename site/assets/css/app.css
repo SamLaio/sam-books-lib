@@ -1113,8 +1113,8 @@ td.col-title {
 
 th.col-cover,
 td.col-cover {
-  width: 72px;
-  min-width: 72px;
+  width: 116px;
+  min-width: 116px;
   text-align: center;
 }
 
@@ -1333,9 +1333,11 @@ td.col-read {
 
 .catalog-cover {
   display: block;
-  width: 48px;
-  height: 72px;
+  width: auto;
+  height: 128px;
+  max-width: 100%;
   object-fit: contain;
+  box-sizing: border-box;
   border-radius: 4px;
   border: 1px solid var(--line);
   background: #f8fafc;
@@ -2318,6 +2320,29 @@ body[data-theme="dark"] .admin-job-mobile-card {
     box-shadow: none;
     padding: 0;
     gap: 8px;
+  }
+
+  .page-link,
+  .page-size-link,
+  .page-jump-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 56px;
+    padding: 12px 16px;
+    font-size: 18px;
+    line-height: 1.2;
+    box-sizing: border-box;
+  }
+
+  .page-size-link {
+    min-width: 72px;
+  }
+
+  .page-jump-input {
+    min-height: 56px;
+    font-size: 18px;
+    box-sizing: border-box;
   }
 
   .book-dialog {
