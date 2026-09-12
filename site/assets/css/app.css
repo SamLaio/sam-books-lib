@@ -119,6 +119,8 @@ input[type="search"] {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
+  min-height: 40px;
+  box-sizing: border-box;
   background: var(--card);
   color: var(--text);
 }
@@ -331,18 +333,26 @@ select {
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 14px;
+  min-height: 40px;
+  box-sizing: border-box;
   background: var(--card);
   color: var(--text);
 }
 
 button,
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: var(--accent);
   color: #fff;
   border-radius: 10px;
   padding: 10px 14px;
   font-size: 14px;
+  min-height: 40px;
+  line-height: 1.2;
+  box-sizing: border-box;
   text-decoration: none;
   cursor: pointer;
 }
@@ -1283,7 +1293,7 @@ td.col-read {
 
 .page-jump-btn {
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .page-size-link {
@@ -1291,12 +1301,15 @@ td.col-read {
   align-items: center;
   justify-content: center;
   min-width: 44px;
+  min-height: 40px;
   padding: 8px 10px;
   border-radius: 10px;
   background: #e2e8f0;
   color: #0f172a;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
 .page-size-link.current {
@@ -1306,14 +1319,19 @@ td.col-read {
 }
 
 .page-link {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 38px;
+  min-height: 40px;
   text-align: center;
   border-radius: 10px;
   padding: 8px 10px;
   background: #e2e8f0;
   color: #0f172a;
   text-decoration: none;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 
 .page-link.current {
@@ -2322,9 +2340,10 @@ body[data-theme="dark"] .admin-job-mobile-card {
     gap: 8px;
   }
 
+  button:not(.theme-fab):not(.scroll-fab):not(.logic-picker__btn):not(.admin-tabs__tab):not(.reader-toolbar__icon-btn):not(.icon-action-btn),
+  .btn:not(.reader-toolbar__icon-btn):not(.icon-action-btn),
   .page-link,
-  .page-size-link,
-  .page-jump-btn {
+  .page-size-link {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2335,14 +2354,26 @@ body[data-theme="dark"] .admin-job-mobile-card {
     box-sizing: border-box;
   }
 
+  .search-form input[type="search"],
+  .search-form select,
+  .page-jump-input {
+    min-height: 56px;
+    padding: 12px 16px;
+    font-size: 18px;
+    line-height: 1.2;
+    box-sizing: border-box;
+  }
+
+  .page-link {
+    min-width: 64px;
+  }
+
   .page-size-link {
     min-width: 72px;
   }
 
   .page-jump-input {
-    min-height: 56px;
-    font-size: 18px;
-    box-sizing: border-box;
+    width: 96px;
   }
 
   .book-dialog {
