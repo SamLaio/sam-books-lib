@@ -8,7 +8,7 @@ COPY ./worker ./
 RUN go mod tidy \
     && CGO_ENABLED=1 go build -o /out/books-worker ./cmd/books-worker
 
-FROM php:8.4-fpm-alpine
+FROM php:8.4.27-fpm-alpine
 
 WORKDIR /var/www/html
 

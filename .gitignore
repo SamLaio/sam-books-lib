@@ -25,3 +25,6 @@ release*.md
 *.bak
 opds_*.xml
 *_opds.xml
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
