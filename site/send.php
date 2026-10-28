@@ -7,6 +7,6 @@ require_once __DIR__ . '/bootstrap.php';
 use Calibre\Controllers\SendBookController;
 use Calibre\Controllers\AuthLoginController;
 
-AuthLoginController::requireLogin(__DIR__, $_SERVER);
+AuthLoginController::requireLogin(__DIR__, $_SERVER, str_contains((string) ($_SERVER['HTTP_ACCEPT'] ?? ''), 'application/json'));
 
 (new SendBookController(__DIR__))->handle($_SERVER, $_GET, $_POST);

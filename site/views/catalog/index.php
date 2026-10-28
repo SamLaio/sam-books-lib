@@ -4,7 +4,7 @@ $escape = static function ($value): string {
     return htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
 };
 ?>
-<div class="wrap">
+<div class="wrap" data-send-error="<?= $escape($t('error.send_request_failed')) ?>">
   <div class="panel">
     <h1><a class="title-home-link" href="index.php"><?= $escape($siteTitle ?? $t('layout.default_title')) ?></a></h1>
     <div class="meta">

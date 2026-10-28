@@ -18,6 +18,7 @@ return [
     'common.download' => 'Download',
     'common.read' => 'Read',
     'common.send' => 'Send',
+    'error.send_request_failed' => 'Unable to confirm the delivery request. Check delivery jobs in account settings before retrying.',
     'common.email' => 'Email',
     'common.id' => 'ID',
     'common.status' => 'Status',

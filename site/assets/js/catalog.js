@@ -198,27 +198,26 @@
     }
   };
 
+  let noticeTimer;
   const setTopNotice = (message, isError = false) => {
-    const panel = document.querySelector(".panel");
-    if (!panel) {
-      return;
-    }
-
-    let node = panel.querySelector(".message[data-scan-message], .error[data-scan-message]");
+    let node = document.querySelector("[data-scan-message]");
     if (!node) {
       node = document.createElement("div");
       node.setAttribute("data-scan-message", "1");
-      const toolbar = panel.querySelector(".toolbar");
-      if (toolbar && toolbar.parentNode === panel) {
-        toolbar.insertAdjacentElement("afterend", node);
-      } else {
-        panel.appendChild(node);
-      }
+      node.setAttribute("role", "status");
+      node.setAttribute("popover", "manual");
+      document.body.appendChild(node);
     }
 
     node.className = isError ? "error" : "message";
-    node.setAttribute("data-scan-message", "1");
     node.textContent = message;
+    node.hidden = false;
+    node.showPopover?.();
+    window.clearTimeout(noticeTimer);
+    noticeTimer = window.setTimeout(() => {
+      node.hidePopover?.();
+      node.hidden = true;
+    }, isError ? 10000 : 6000);
   };
 
   if (themeToggleButton) {
@@ -357,6 +356,41 @@
       window.scrollTo({ top: targetTop, behavior: "smooth" });
     });
   }
+
+  const pendingSends = new Set();
+  document.addEventListener("click", async (event) => {
+    const link = event.target.closest?.("a.send-btn[href]");
+    if (!link || link.hidden || link.getAttribute("href") === "#") {
+      return;
+    }
+    event.preventDefault();
+    const endpoint = link.href;
+    if (pendingSends.has(endpoint)) {
+      return;
+    }
+    pendingSends.add(endpoint);
+    link.setAttribute("aria-disabled", "true");
+    link.setAttribute("aria-busy", "true");
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { Accept: "application/json" },
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) {
+        throw new Error(result.error || "");
+      }
+      setTopNotice(result.message);
+    } catch (error) {
+      setTopNotice(error.name === "Error" && error.message
+        ? error.message
+        : document.querySelector("[data-send-error]").getAttribute("data-send-error"), true);
+    } finally {
+      pendingSends.delete(endpoint);
+      link.removeAttribute("aria-disabled");
+      link.removeAttribute("aria-busy");
+    }
+  });
 
   const dialog = document.querySelector("[data-book-dialog]");
   if (!dialog) {

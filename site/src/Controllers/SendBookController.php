@@ -13,6 +13,7 @@ final class SendBookController
     private AuthService $authService;
     private ScanService $scanService;
     private ScanScheduleService $scheduleService;
+    private bool $json = false;
 
     public function __construct(
         string $appRoot,
@@ -28,6 +29,7 @@ final class SendBookController
 
     public function handle(array $server, array $query, array $post): void
     {
+        $this->json = str_contains((string) ($server['HTTP_ACCEPT'] ?? ''), 'application/json');
         $method = strtoupper((string) ($server['REQUEST_METHOD'] ?? 'GET'));
         if (!in_array($method, ['GET', 'POST'], true)) {
             $this->redirectBack('mail_error', Lang::t('error.method_not_allowed'));
@@ -83,6 +85,14 @@ final class SendBookController
 
     private function redirectBack(string $key, string $message): void
     {
+        if ($this->json) {
+            $ok = $key === 'mail_notice';
+            http_response_code($ok ? 202 : 400);
+            header('Content-Type: application/json; charset=UTF-8');
+            echo json_encode(['ok' => $ok, $ok ? 'message' : 'error' => $message], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            exit;
+        }
+
         $target = 'index.php';
         $referer = trim((string) ($_SERVER['HTTP_REFERER'] ?? ''));
 

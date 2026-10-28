@@ -566,6 +566,30 @@ button[disabled] {
   color: #065f46;
 }
 
+[data-scan-message] {
+  position: fixed;
+  inset: auto 16px 76px auto;
+  z-index: 10000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: min(420px, calc(100vw - 32px));
+  margin: 0;
+  padding: 14px 18px;
+  border: 1px solid #a7f3d0;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+  box-shadow: 0 8px 24px #0003;
+}
+
+[data-scan-message].error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
 .error {
   color: #991b1b;
   background: #fef2f2;
