@@ -568,6 +568,7 @@ func sendMail(s smtpSettings, from string, to string, subject string, body strin
 	}
 	var msg strings.Builder
 	writer := multipart.NewWriter(&msg)
+	fmt.Fprintf(&msg, "Date: %s\r\n", time.Now().Format(time.RFC1123Z))
 	fmt.Fprintf(&msg, "From: %s\r\n", from)
 	fmt.Fprintf(&msg, "To: %s\r\n", to)
 	fmt.Fprintf(&msg, "Subject: %s\r\n", mime.QEncoding.Encode("utf-8", subject))
