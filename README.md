@@ -25,7 +25,7 @@ SamBooksLib 是一個可自行架設的電子書書庫網站，適合把 Calibre
 
 預建 Docker image 發布在 Docker Hub：
 
-- Docker Hub：<https://hub.docker.com/repository/docker/f85122/sam-books-lib>
+- Docker Hub：<https://hub.docker.com/r/f85122/sam-books-lib>
 - Image：`f85122/sam-books-lib`
 - Latest tag：`f85122/sam-books-lib:latest`
 
