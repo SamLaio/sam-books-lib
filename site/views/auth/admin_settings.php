@@ -112,6 +112,10 @@ $magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) ===
               <input type="checkbox" name="enabled" value="1" checked>
               <?= $escape($t('common.enabled')) ?>
             </label>
+            <label>
+              <input type="checkbox" name="send_enabled" value="1" checked>
+              <?= $escape($t('admin.send_enabled')) ?>
+            </label>
             <button type="submit"><?= $escape($t('admin.create_user')) ?></button>
           </form>
 
@@ -182,6 +186,11 @@ $magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) ===
                     <span><?= $escape($t('admin.failed_login_attempts_label')) ?></span>
                     <small><?= $escape($t('admin.failed_login_attempts', ['count' => (string) $managedFailedAttempts])) ?></small>
                   </div>
+
+                  <label class="admin-user-mobile-dialog__toggle-row">
+                    <input type="checkbox" name="target_send_enabled" value="1" <?= (int) ($managed['send_enabled'] ?? 1) === 1 ? 'checked' : '' ?>>
+                    <span><?= $escape($t('admin.send_enabled')) ?></span>
+                  </label>
 
                   <div class="admin-user-mobile-dialog__actions">
                     <button type="submit"><?= $escape($t('common.update')) ?></button>
@@ -257,6 +266,7 @@ $magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) ===
                   <th><?= $escape($t('admin.new_password_optional')) ?></th>
                   <th><?= $escape($t('common.email')) ?></th>
                   <th><?= $escape($t('common.enabled')) ?></th>
+                  <th><?= $escape($t('admin.send_enabled')) ?></th>
                   <th><?= $escape($t('admin.failed_login_attempts_label')) ?></th>
                   <th><?= $escape($t('common.actions')) ?></th>
                 </tr>
@@ -302,6 +312,9 @@ $magicLoginEnabled = ((string) ($appSettings['magic_login_enabled'] ?? '1')) ===
                       <?php else: ?>
                         <input form="<?= $escape($formId) ?>" type="checkbox" name="target_enabled" value="1" <?= $managedEnabled ? 'checked' : '' ?>>
                       <?php endif; ?>
+                    </td>
+                    <td>
+                      <input form="<?= $escape($formId) ?>" type="checkbox" name="target_send_enabled" value="1" aria-label="<?= $escape($t('admin.send_enabled')) ?>" <?= (int) ($managed['send_enabled'] ?? 1) === 1 ? 'checked' : '' ?>>
                     </td>
                     <td>
                       <?= $escape($t('admin.failed_login_attempts', ['count' => (string) $managedFailedAttempts])) ?>

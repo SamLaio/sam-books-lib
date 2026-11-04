@@ -280,7 +280,7 @@ final class AuthService
         }
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, email, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
+            'SELECT id, username, email, role, is_enabled, send_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
              FROM users
              WHERE id = :id
              LIMIT 1'
@@ -298,7 +298,7 @@ final class AuthService
         }
 
         $stmt = $this->getPdo()->prepare(
-            'SELECT id, username, email, role, is_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
+            'SELECT id, username, email, role, is_enabled, send_enabled, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, hidden_authors, hidden_tags, created_at, updated_at
              FROM users
              WHERE id = :id AND is_enabled = 1
              LIMIT 1'
@@ -355,7 +355,7 @@ final class AuthService
         $this->enforceLoginAttemptLimit();
 
         $stmt = $this->getPdo()->query(
-            'SELECT id, username, email, role, is_enabled, is_default, failed_login_attempts, ui_locale, hidden_authors, hidden_tags, created_at, updated_at
+            'SELECT id, username, email, role, is_enabled, send_enabled, is_default, failed_login_attempts, ui_locale, hidden_authors, hidden_tags, created_at, updated_at
              FROM users
              ORDER BY is_default DESC, id ASC'
         );
@@ -379,7 +379,8 @@ final class AuthService
         string $password,
         string $email = '',
         string $role = self::ROLE_USER,
-        bool $enabled = true
+        bool $enabled = true,
+        bool $sendEnabled = true
     ): void
     {
         $normalizedUsername = $this->normalizeUsername($username);
@@ -403,10 +404,10 @@ final class AuthService
 
         $stmt = $this->getPdo()->prepare(
             'INSERT INTO users(
-                username, email, password_hash, role, is_enabled, failed_login_attempts, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
+                username, email, password_hash, role, is_enabled, send_enabled, failed_login_attempts, api_token, ui_theme, ui_theme_updated_at, ui_locale, ui_sort_field, ui_sort_direction, is_default, created_at, updated_at
              )
              VALUES(
-                :username, :email, :password_hash, :role, :is_enabled, 0, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                :username, :email, :password_hash, :role, :is_enabled, :send_enabled, 0, :api_token, :ui_theme, CURRENT_TIMESTAMP, :ui_locale, :ui_sort_field, :ui_sort_direction, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
              )'
         );
 
@@ -417,6 +418,7 @@ final class AuthService
                 ':password_hash' => password_hash($this->pepper($password), PASSWORD_DEFAULT),
                 ':role' => $normalizedRole,
                 ':is_enabled' => $enabled ? 1 : 0,
+                ':send_enabled' => $sendEnabled ? 1 : 0,
                 ':api_token' => bin2hex(random_bytes(24)),
                 ':ui_theme' => $this->getDefaultTheme(),
                 ':ui_locale' => $this->getDefaultLocale(),
@@ -438,7 +440,8 @@ final class AuthService
         string $username,
         string $email,
         ?string $newPassword,
-        bool $enabled
+        bool $enabled,
+        bool $sendEnabled = true
     ): void
     {
         if ($targetUserId < 1) {
@@ -475,6 +478,7 @@ final class AuthService
                  SET username = :username,
                      email = :email,
                      is_enabled = :is_enabled,
+                     send_enabled = :send_enabled,
                      updated_at = CURRENT_TIMESTAMP
                  WHERE id = :id'
             );
@@ -485,6 +489,7 @@ final class AuthService
                 ':username' => $normalizedUsername,
                 ':email' => $normalizedEmail,
                 ':is_enabled' => $enabledValue,
+                ':send_enabled' => $sendEnabled ? 1 : 0,
             ]);
 
             if ($enabledValue !== $currentEnabledValue) {
@@ -1629,6 +1634,10 @@ final class AuthService
         $this->pdo = $pdo;
         $this->assertTableExists('users');
         $this->assertTableExists('app_settings');
+        $columns = $pdo->query('PRAGMA table_info(users)')->fetchAll(\PDO::FETCH_COLUMN, 1);
+        if (!in_array('send_enabled', $columns, true)) {
+            $pdo->exec('ALTER TABLE users ADD COLUMN send_enabled INTEGER NOT NULL DEFAULT 1');
+        }
     }
 
     private function backupBrokenSettingsDatabase(string $dbPath): string

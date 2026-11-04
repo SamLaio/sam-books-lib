@@ -18,6 +18,8 @@ return [
     'common.download' => '下載',
     'common.read' => '閱讀',
     'common.send' => '寄送',
+    'admin.send_enabled' => '啟用寄送',
+    'error.send_disabled_for_user' => '管理員已停用此帳號的寄送功能。',
     'error.send_request_failed' => '無法確認寄送排程結果，請先至帳號設定查看寄送工作，再決定是否重試。',
     'common.email' => 'Email',
     'common.id' => 'id',

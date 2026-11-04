@@ -18,6 +18,8 @@ return [
     'common.download' => 'Download',
     'common.read' => 'Read',
     'common.send' => 'Send',
+    'admin.send_enabled' => 'Enable book delivery',
+    'error.send_disabled_for_user' => 'Book delivery has been disabled for this account by an administrator.',
     'error.send_request_failed' => 'Unable to confirm the delivery request. Check delivery jobs in account settings before retrying.',
     'common.email' => 'Email',
     'common.id' => 'ID',

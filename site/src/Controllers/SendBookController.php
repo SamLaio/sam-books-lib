@@ -52,6 +52,9 @@ final class SendBookController
             }
 
             $appSettings = $this->authService->getAppSettings();
+            if ((int) ($user['send_enabled'] ?? 0) !== 1) {
+                throw new \RuntimeException(Lang::t('error.send_disabled_for_user'));
+            }
             if (!$this->authService->isSmtpConfigured($appSettings)) {
                 throw new \RuntimeException(Lang::t('error.smtp_not_configured_send_disabled'));
             }
@@ -75,7 +78,7 @@ final class SendBookController
                 'mail_notice',
                 Lang::t('message.send_book_queued', [
                     'email' => $recipientEmail,
-                    'time' => (string) ($scheduled['run_at'] ?? date('c')),
+                    'time' => (new \DateTimeImmutable((string) ($scheduled['run_at'] ?? 'now')))->format('Y-m-d H:i'),
                 ])
             );
         } catch (\Throwable $e) {

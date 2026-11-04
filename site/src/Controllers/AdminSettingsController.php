@@ -107,7 +107,8 @@ final class AdminSettingsController
                         (string) ($post['password'] ?? ''),
                         (string) ($post['email'] ?? ''),
                         AuthService::ROLE_USER,
-                        ((string) ($post['enabled'] ?? '1')) === '1'
+                        ((string) ($post['enabled'] ?? '1')) === '1',
+                        ((string) ($post['send_enabled'] ?? '0')) === '1'
                     );
                     $notice = Lang::t('message.user_created');
                 } elseif ($action === 'admin_update_login_attempts') {
@@ -126,7 +127,8 @@ final class AdminSettingsController
                         (string) ($post['target_username'] ?? ''),
                         (string) ($post['target_email'] ?? ''),
                         (string) ($post['target_password'] ?? ''),
-                        ((string) ($post['target_enabled'] ?? '0')) === '1'
+                        ((string) ($post['target_enabled'] ?? '0')) === '1',
+                        ((string) ($post['target_send_enabled'] ?? '0')) === '1'
                     );
                     $notice = Lang::t('message.user_updated');
                 } elseif ($action === 'admin_update_user_library') {

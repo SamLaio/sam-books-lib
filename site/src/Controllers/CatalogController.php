@@ -126,6 +126,8 @@ final class CatalogController
             $viewData['canSendBookByEmail'] = $viewData['currentUserEmail'] !== ''
                 && filter_var($viewData['currentUserEmail'], FILTER_VALIDATE_EMAIL) !== false
                 && $viewData['smtpEnabled'];
+            $viewData['canSendBookByEmail'] = $viewData['canSendBookByEmail']
+                && (int) ($currentUser['send_enabled'] ?? 0) === 1;
             $viewData['currentTheme'] = $authService->getPreferredTheme();
             $viewData['isAdmin'] = $authService->isCurrentUserAdmin();
             $viewData['settingsUrl'] = 'settings.php';

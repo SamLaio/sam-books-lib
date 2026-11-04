@@ -70,7 +70,8 @@ final class BookDetailsController
         $currentUserEmail = is_array($currentUser) ? trim((string) ($currentUser['email'] ?? '')) : '';
         $canSendBookByEmail = $currentUserEmail !== ''
             && filter_var($currentUserEmail, FILTER_VALIDATE_EMAIL) !== false
-            && $authService->isSmtpConfigured();
+            && $authService->isSmtpConfigured()
+            && (int) ($currentUser['send_enabled'] ?? 0) === 1;
 
         if ($canSendBookByEmail) {
             $details['send_url'] = 'send.php?id=' . $bookId;
