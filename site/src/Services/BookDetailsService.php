@@ -50,6 +50,7 @@ final class BookDetailsService
 
         return [
             'id' => (int) ($book['id'] ?? 0),
+            'file_size_bytes' => $book['file_size_bytes'] ?? null,
             'title' => trim((string) ($book['title'] ?? '')),
             'author' => $author,
             'authors' => $this->splitCsvField($author),

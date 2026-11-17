@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"mime"
 	"mime/multipart"
 	"net"
@@ -592,7 +593,24 @@ func sendMail(s smtpSettings, from string, to string, subject string, body strin
 	if err != nil {
 		return err
 	}
-	data, err := os.ReadFile(attachment)
+	// Match SendBookController::MAX_ATTACHMENT_BYTES.
+	const maxAttachmentBytes = 50_000_000
+	file, err := os.Open(attachment)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() > maxAttachmentBytes {
+		return errors.New("attachment exceeds the 50 MB sending limit")
+	}
+	data, err := io.ReadAll(io.LimitReader(file, maxAttachmentBytes+1))
+	if len(data) > maxAttachmentBytes {
+		return errors.New("attachment exceeds the 50 MB sending limit")
+	}
 	if err != nil {
 		return err
 	}

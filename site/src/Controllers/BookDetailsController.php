@@ -73,7 +73,9 @@ final class BookDetailsController
             && $authService->isSmtpConfigured()
             && (int) ($currentUser['send_enabled'] ?? 0) === 1;
 
-        if ($canSendBookByEmail) {
+        $details['send_too_large'] = $canSendBookByEmail
+            && ($details['file_size_bytes'] ?? 0) > SendBookController::MAX_ATTACHMENT_BYTES;
+        if ($canSendBookByEmail && !$details['send_too_large']) {
             $details['send_url'] = 'send.php?id=' . $bookId;
         }
 

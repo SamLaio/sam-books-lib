@@ -2568,6 +2568,12 @@ body[data-theme="dark"] .admin-job-mobile-card {
   color: #ffffff !important;
 }
 
+.action-buttons .btn.action-text-btn.send-btn[aria-disabled="true"],
+.book-dialog__actions .btn.action-text-btn.send-btn[aria-disabled="true"] {
+  background: #555b65 !important;
+  cursor: not-allowed;
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

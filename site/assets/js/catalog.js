@@ -900,6 +900,19 @@
       return;
     }
 
+    const tooLarge = book?.send_too_large === true;
+    if (tooLarge) {
+      sendLink.hidden = false;
+      sendLink.removeAttribute("href");
+      sendLink.setAttribute("role", "link");
+      sendLink.setAttribute("aria-disabled", "true");
+      sendLink.title = sendLink.dataset.tooLargeTitle;
+      return;
+    }
+
+    sendLink.removeAttribute("role");
+    sendLink.removeAttribute("aria-disabled");
+    sendLink.title = sendLink.getAttribute("aria-label") || "";
     const directUrl = typeof book?.send_url === "string" ? book.send_url.trim() : "";
     if (directUrl !== "") {
       sendLink.hidden = false;

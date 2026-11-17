@@ -297,6 +297,7 @@ return [
     'error.smtp_response_read_failed' => 'SMTP 讀取回應失敗。',
     'error.invalid_send_book_payload_book_id' => '寄送排程缺少有效的書籍 ID。',
     'error.invalid_send_book_payload_recipient_email' => '寄送排程缺少有效的收件者 Email。',
+    'error.book_attachment_too_large' => '附件超過 50 MB 寄送上限。',
     'error.book_not_found_for_send_book' => '寄送排程對應的書籍不存在。',
     'error.method_not_allowed' => '不支援的請求方法。',
     'error.unsupported_action' => '不支援的動作。',

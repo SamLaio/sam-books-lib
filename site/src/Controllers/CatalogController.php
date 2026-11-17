@@ -294,9 +294,11 @@ final class CatalogController
                 $coverPreviewUrl = 'opds.php?feed=cover&id=' . (int) $row['id'];
             }
 
+            $sendTooLarge = $canSendBookByEmail && ($row['file_size_bytes'] ?? 0) > SendBookController::MAX_ATTACHMENT_BYTES;
             $baseRow = $row + [
+                'send_too_large' => $sendTooLarge,
                 'download_url' => isset($row['id']) ? 'download.php?id=' . (int) $row['id'] : null,
-                'send_url' => $canSendBookByEmail && isset($row['id']) ? 'send.php?id=' . (int) $row['id'] : null,
+                'send_url' => $canSendBookByEmail && !$sendTooLarge && isset($row['id']) ? 'send.php?id=' . (int) $row['id'] : null,
                 'read_url' => (isset($row['id']) && $this->hasReadableBook($row))
                     ? 'reader.php?id=' . (int) $row['id'] . '&back=' . rawurlencode($currentCatalogUrl)
                     : null,

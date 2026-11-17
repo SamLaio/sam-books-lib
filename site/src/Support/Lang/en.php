@@ -297,6 +297,7 @@ return [
     'error.smtp_response_read_failed' => 'Failed to read SMTP response.',
     'error.invalid_send_book_payload_book_id' => 'The send_book job payload is missing a valid book ID.',
     'error.invalid_send_book_payload_recipient_email' => 'The send_book job payload is missing a valid recipient email.',
+    'error.book_attachment_too_large' => 'The attachment exceeds the 50 MB sending limit.',
     'error.book_not_found_for_send_book' => 'The book for this send_book job was not found.',
     'error.method_not_allowed' => 'Method not allowed.',
     'error.unsupported_action' => 'Unsupported action.',

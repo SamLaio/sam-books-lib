@@ -2,6 +2,7 @@
 
 namespace Calibre\Controllers;
 
+use Calibre\LibraryIndex;
 use Calibre\Services\AuthService;
 use Calibre\Services\ScanScheduleService;
 use Calibre\ScanService;
@@ -9,6 +10,8 @@ use Calibre\Support\Lang;
 
 final class SendBookController
 {
+    public const MAX_ATTACHMENT_BYTES = 50_000_000;
+
     private string $appRoot;
     private AuthService $authService;
     private ScanService $scanService;
@@ -62,6 +65,15 @@ final class SendBookController
             $recipientEmail = trim((string) ($user['email'] ?? ''));
             if ($recipientEmail === '' || !filter_var($recipientEmail, FILTER_VALIDATE_EMAIL)) {
                 throw new \RuntimeException(Lang::t('error.current_user_email_invalid'));
+            }
+
+            $index = new LibraryIndex($this->scanService->getSqlitePath());
+            $book = $index->getBookById((int) $bookId);
+            if ($book === null) {
+                throw new \RuntimeException(Lang::t('error.book_not_found'));
+            }
+            if (($book['file_size_bytes'] ?? 0) > self::MAX_ATTACHMENT_BYTES) {
+                throw new \RuntimeException(Lang::t('error.book_attachment_too_large'));
             }
 
             $scheduled = $this->scheduleService->enqueueManual(

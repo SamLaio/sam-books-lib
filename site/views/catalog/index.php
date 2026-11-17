@@ -17,9 +17,6 @@ $escape = static function ($value): string {
           | <a class="title-home-link" href="<?= $escape($settingsUrl ?? 'settings.php') ?>"><?= $escape($t('layout.account_settings')) ?></a>
           | <a class="title-home-link" href="<?= $escape($logoutUrl ?? 'logout.php') ?>"><?= $escape($t('common.logout')) ?></a>
         <?php endif; ?>
-        <?php if ($lastRebuildAt !== null): ?>
-          <?= !empty($authEnabled) ? ' | ' : '' ?><?= $escape($t('layout.last_rebuild', ['time' => (string) $lastRebuildAt])) ?>
-        <?php endif; ?>
       </p>
       <p class="meta__line meta__line--search">
         <span class="search-help-text"><?= $t('layout.search_help') ?></span> |
@@ -239,7 +236,9 @@ $escape = static function ($value): string {
                     <?php if (($row['download_url'] ?? null) !== null): ?>
                       <a class="btn download-btn action-text-btn" href="<?= $escape($row['download_url']) ?>"><?= $escape($t('common.download')) ?></a>
                     <?php endif; ?>
-                    <?php if (($row['send_url'] ?? null) !== null): ?>
+                    <?php if (!empty($row['send_too_large'])): ?>
+                      <span class="btn send-btn action-text-btn" role="link" aria-disabled="true" title="<?= $escape($t('error.book_attachment_too_large')) ?>"><?= $escape($t('common.send')) ?></span>
+                    <?php elseif (($row['send_url'] ?? null) !== null): ?>
                       <a class="btn send-btn action-text-btn" href="<?= $escape($row['send_url']) ?>"><?= $escape($t('common.send')) ?></a>
                     <?php endif; ?>
                   </div>
@@ -320,7 +319,7 @@ $escape = static function ($value): string {
             <a class="btn download-btn action-text-btn book-dialog__download" data-book-detail-download href="#" hidden title="<?= $escape($t('common.download')) ?>" aria-label="<?= $escape($t('common.download')) ?>">
               <?= $escape($t('common.download')) ?>
             </a>
-            <a class="btn send-btn action-text-btn book-dialog__send" data-book-detail-send href="#" hidden title="<?= $escape($t('common.send')) ?>" aria-label="<?= $escape($t('common.send')) ?>">
+            <a class="btn send-btn action-text-btn book-dialog__send" data-book-detail-send data-too-large-title="<?= $escape($t('error.book_attachment_too_large')) ?>" href="#" hidden title="<?= $escape($t('common.send')) ?>" aria-label="<?= $escape($t('common.send')) ?>">
               <?= $escape($t('common.send')) ?>
             </a>
           </div>
@@ -369,6 +368,12 @@ $escape = static function ($value): string {
       </dialog>
     <?php endif; ?>
   </div>
+
+  <?php if ($lastRebuildAt !== null): ?>
+    <p class="meta" style="margin-top: 0.5rem; text-align: right;">
+      <?= $escape($t('layout.last_rebuild', ['time' => (string) $lastRebuildAt])) ?>
+    </p>
+  <?php endif; ?>
 
   <div class="fab-stack">
     <button

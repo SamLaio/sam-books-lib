@@ -900,6 +900,7 @@ class LibraryIndex
                  library_last_modified = :library_last_modified,
                  cover_path = :cover_path,
                  source_mtime = :source_mtime,
+                 file_size_bytes = :file_size_bytes,
                  formats_json = :formats_json,
                  metadata_json = :metadata_json,
                  is_read = :is_read
@@ -908,10 +909,10 @@ class LibraryIndex
         $insertStmt = $this->pdo->prepare(
             'INSERT INTO books
             (title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
-             uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, formats_json, metadata_json, is_read, created_at)
+             uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, file_size_bytes, formats_json, metadata_json, is_read, created_at)
             VALUES
             (:title, :author, :tag, :series, :isbn, :publisher, :language, :description, :published_at, :series_index,
-             :uuid, :author_sort, :library_timestamp, :library_last_modified, :path, :cover_path, :source_mtime, :formats_json, :metadata_json, :is_read, :created_at)'
+             :uuid, :author_sort, :library_timestamp, :library_last_modified, :path, :cover_path, :source_mtime, :file_size_bytes, :formats_json, :metadata_json, :is_read, :created_at)'
         );
         $existsStmt = $this->pdo->prepare(
             'SELECT 1
@@ -927,9 +928,7 @@ class LibraryIndex
             foreach (array_chunk($pathList, $normalizedBatchSize) as $chunk) {
                 $placeholders = implode(',', array_fill(0, count($chunk), '?'));
                 $sourceStmt = $source->prepare(
-                    'SELECT title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
-                            uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, formats_json, metadata_json, is_read, created_at
-                     FROM books
+                    'SELECT * FROM books
                      WHERE path IN (' . $placeholders . ')'
                 );
                 $sourceStmt->execute(array_values($chunk));
@@ -957,6 +956,7 @@ class LibraryIndex
                         ':source_mtime' => isset($row['source_mtime']) && is_numeric((string) $row['source_mtime'])
                             ? (int) $row['source_mtime']
                             : null,
+                        ':file_size_bytes' => $row['file_size_bytes'] ?? $this->readBookFileSize((string) ($row['path'] ?? '')),
                         ':formats_json' => (string) ($row['formats_json'] ?? ''),
                         ':metadata_json' => (string) ($row['metadata_json'] ?? ''),
                         ':is_read' => isset($row['is_read']) && (int) $row['is_read'] === 1 ? 1 : 0,
@@ -1590,10 +1590,16 @@ class LibraryIndex
         return (float) $value;
     }
 
+    private function readBookFileSize(string $path): ?int
+    {
+        $size = @filesize($path);
+        return $size === false ? null : $size;
+    }
+
     private function getBookListColumns(): string
     {
         return 'id, title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
-            uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, is_read, created_at';
+            uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, file_size_bytes, is_read, created_at';
     }
 
     private function getBookDetailColumns(): string
@@ -1689,10 +1695,10 @@ class LibraryIndex
         $insertStmt = $this->pdo->prepare(
             'INSERT INTO books
             (title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
-             uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, formats_json, metadata_json, is_read)
+             uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, file_size_bytes, formats_json, metadata_json, is_read)
             VALUES
             (:title, :author, :tag, :series, :isbn, :publisher, :language, :description, :published_at, :series_index,
-             :uuid, :author_sort, :library_timestamp, :library_last_modified, :path, :cover_path, :source_mtime, :formats_json, :metadata_json, :is_read)'
+             :uuid, :author_sort, :library_timestamp, :library_last_modified, :path, :cover_path, :source_mtime, :file_size_bytes, :formats_json, :metadata_json, :is_read)'
         );
         $updateStmt = $this->pdo->prepare(
             'UPDATE books
@@ -1712,6 +1718,7 @@ class LibraryIndex
                  library_last_modified = :library_last_modified,
                  cover_path = :cover_path,
                  source_mtime = :source_mtime,
+                 file_size_bytes = :file_size_bytes,
                  formats_json = :formats_json,
                  metadata_json = :metadata_json,
                  is_read = :is_read
@@ -1797,6 +1804,7 @@ class LibraryIndex
                     ':source_mtime' => isset($metadata['source_mtime']) && is_numeric($metadata['source_mtime'])
                         ? (int) $metadata['source_mtime']
                         : null,
+                    ':file_size_bytes' => $this->readBookFileSize($entryPath),
                     ':formats_json' => json_encode($entryFormats, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ':metadata_json' => json_encode($entryMetadata, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
                     ':is_read' => $isRead ? 1 : 0,

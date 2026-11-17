@@ -479,8 +479,8 @@ func newBookWriter(db *sql.DB, snapshots map[string]existingSnapshot) (*bookWrit
 	_, _ = tx.Exec(`DELETE FROM books_fts`)
 	insertBook, err := tx.Prepare(`INSERT INTO books
 (title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
- uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, formats_json, metadata_json, is_read)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+ uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, file_size_bytes, formats_json, metadata_json, is_read)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return cleanup(err)
 	}
@@ -540,6 +540,7 @@ func (w *bookWriter) add(book scanBook) error {
 			normalizePath(entry.Path),
 			normalizePath(book.CoverPath),
 			mtime,
+			bookFileSize(entry.Path),
 			string(formatsJSON),
 			string(metaJSON),
 			isRead,
@@ -607,8 +608,8 @@ func replaceBooks(db *sql.DB, books []scanBook, snapshots map[string]existingSna
 	_, _ = tx.Exec(`DELETE FROM books_fts`)
 	insertBook, err := tx.Prepare(`INSERT INTO books
 (title, author, tag, series, isbn, publisher, language, description, published_at, series_index,
- uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, formats_json, metadata_json, is_read)
-VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+ uuid, author_sort, library_timestamp, library_last_modified, path, cover_path, source_mtime, file_size_bytes, formats_json, metadata_json, is_read)
+VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return 0, err
 	}
@@ -665,6 +666,7 @@ VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 				normalizePath(entry.Path),
 				normalizePath(book.CoverPath),
 				mtime,
+				bookFileSize(entry.Path),
 				string(formatsJSON),
 				string(metaJSON),
 				isRead,
@@ -714,6 +716,14 @@ func expandFormatEntries(book scanBook) []formatEntry {
 	return out
 }
 
+func bookFileSize(path string) any {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return nil
+	}
+	return info.Size()
+}
+
 func ensureLibrarySchema(db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS books (
@@ -735,6 +745,7 @@ library_last_modified TEXT,
 path TEXT NOT NULL,
 cover_path TEXT,
 source_mtime INTEGER,
+file_size_bytes INTEGER,
 formats_json TEXT,
 metadata_json TEXT,
 is_read INTEGER NOT NULL DEFAULT 0,
@@ -750,6 +761,18 @@ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 	for _, stmt := range statements {
 		if _, err := db.Exec(stmt); err != nil {
 			return err
+		}
+	}
+	var hasFileSize int
+	if err := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'file_size_bytes'").Scan(&hasFileSize); err != nil {
+		return err
+	}
+	if hasFileSize == 0 {
+		if _, err := db.Exec("ALTER TABLE books ADD COLUMN file_size_bytes INTEGER"); err != nil {
+			// PHP may have applied the migration while the worker was starting.
+			if checkErr := db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('books') WHERE name = 'file_size_bytes'").Scan(&hasFileSize); checkErr != nil || hasFileSize == 0 {
+				return err
+			}
 		}
 	}
 	if _, err := db.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS books_fts USING fts5(path UNINDEXED, title, author, tag, series, isbn, tokenize = 'unicode61')`); err != nil {

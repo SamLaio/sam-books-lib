@@ -695,6 +695,13 @@ final class MigrationRunner
                     }
                 },
             ],
+            [
+                'name' => '202604290108_add_book_file_size',
+                'signature' => 'book_file_size_v1',
+                'up' => function (\PDO $pdo): void {
+                    $this->ensureColumn($pdo, 'books', 'file_size_bytes', 'INTEGER');
+                },
+            ],
         ];
     }
 
