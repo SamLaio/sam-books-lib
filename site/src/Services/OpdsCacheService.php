@@ -165,6 +165,7 @@ final class OpdsCacheService
         $accept = strtolower(trim((string) ($server['HTTP_ACCEPT'] ?? '')));
 
         $payload = [
+            'format_version' => 2,
             'accept' => $accept,
             'query' => $normalizedQuery,
             'url_context' => $this->normalizeUrlContext($server),

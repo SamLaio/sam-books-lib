@@ -378,6 +378,50 @@ OPDS URL 生成優先使用 `SITE_BASE_URL`。修改相關邏輯時，請確認 
 
 `BOOKSLIB_X_ACCEL_REDIRECT=1` 時，OPDS cover/download 與一般下載會在 PHP 完成授權與路徑檢查後交給 nginx internal location 傳送。相關 internal route 定義在 `docker/nginx/default.conf`，PHP 端入口為 `Calibre\Http\AccelRedirect`。修改下載或封面邏輯時，需同時確認 X-Accel 與 PHP fallback 都能正常回應。
 
+## OPDS 1.2 相容性檢查
+
+2026-11-25 依 [OPDS 1.2](https://specs.opds.io/opds-1.2)、[Atom RFC 4287](https://www.rfc-editor.org/rfc/rfc4287)、[分頁 RFC 5005](https://www.rfc-editor.org/rfc/rfc5005) 與 [OpenSearch 1.1](https://github.com/dewitt/opensearch/blob/master/opensearch-1-1-draft-6.md) 檢查。範圍是目前提供的 OPDS 1.2 服務；不是 OPDS 2.0，也不是第三方認證。
+
+| 檢查範圍 | 結果與實作 |
+| --- | --- |
+| §2 根目錄、navigation / acquisition | 單一根目錄；全部書籍、已讀、未讀與最近新增均宣告 acquisition，作者／標籤／系列索引宣告 navigation。 |
+| §2、§7.1 MIME 與連結 | `profile=opds-catalog`、`kind`、`self`、`start`、`up` 與回應類型一致；瀏覽器 HTML/XML Accept 保留 XML 預覽行為。 |
+| §2.4 分頁 | `next`、`previous`、`first`、`last` 保留篩選與 token；分頁共用 feed ID，self URL 區分頁碼。 |
+| §3 搜尋 | OpenSearch discovery、MIME、`{searchTerms}`、UTF-8 與 token URL 正常；ShortName / Description 限制為 16 / 1024 字元。 |
+| §4 Facets | 提供分類導覽，未宣告 `opds:facetGroup` / `activeFacet`；這些選配屬性不適用。 |
+| §5 書籍項目 | 每個輸出的項目都有 acquisition link、正確 MIME 與 Atom 必要欄位；原檔遺失時不輸出沒有下載連結的項目。 |
+| §5.1 識別碼 | 根 UUID 存於 `data/opds-identity.json`；子 feed 與項目使用穩定衍生 ID，與網域、token、分頁及 SQLite row ID 無關。同一 Calibre UUID 的不同格式不再撞 ID。 |
+| §5.1 Metadata | 輸出索引中的書名、作者、分類、系列、系列序號、作者排序、識別碼、ISBN、UUID、出版者、語言、日期、描述，以及 metadata 中已有的 rights；不輸出本機路徑等操作資料。描述以 text content 提供。 |
+| §5.1 日期與 Atom 結構 | 出版日 `dcterms:issued` 不再使用匯入時間代替；`atom:published` 使用項目加入時間。補上 content，並使用絕對 category scheme IRI、Dublin Core Terms 與具 namespace 的延伸屬性。 |
+| §5.1.2 完整／部分項目 | 清單內直接提供已索引的出版 metadata，沒有宣告另一份完整項目。書檔內尚未被掃描器匯入的 metadata 不在這次 OPDS 檢查範圍。 |
+| §5.2 封面 | 書籍 image / thumbnail 連結與 PNG 串流已驗證；導覽圖示是額外 SVG，token 入口使用相同的公開 assets 路徑。 |
+| §5.3–5.4、§6 選配服務 | 目前是直接下載；未提供買書、借閱、訂閱、間接取得、推薦、熱門、shelf 或聚合服務，相關條件不適用。已讀清單不是 shelf。 |
+| §2.5 完整爬取 feed | 未宣告 crawlable / fh:complete，這項選配功能未提供。 |
+| §7.2 驗證與錯誤 | Basic Auth 與 token 均實測；401 保留 Basic challenge，400/401/404/405 使用可解析的 Atom XML，HEAD 無 body，405 提供 Allow。 |
+| §7.3 快取與傳輸 | 保留既有磁碟快取與分頁；快取格式版本已更新，舊 XML 不會繼續命中。傳輸壓縮仍屬部署端可改善項目。 |
+
+### 重跑檢查
+
+本次結果：913 項 PHP 檢查、196 次隔離 HTTP 請求、141 份 Atom feed 的 schema 驗證均通過；修改的 PHP 檔案語法與 diff whitespace 檢查也通過。schema 的上游筆誤修正方式見下文。
+
+在專案根目錄執行，PHP 需有 DOM、mbstring、PDO SQLite；HTTP 檢查使用 Python 標準庫。所有帳號、書籍、SQLite、identity 與 XML 都建立在系統暫存目錄，保留供檢查，不讀寫正式 `site/data`。
+
+```powershell
+php scripts/check-opds.php
+python scripts/check-opds-http.py
+# 使用上一個命令輸出的 Fixtures 路徑；需要 Python lxml 與 Java。
+python scripts/check-opds-schema.py <Fixtures路徑>
+```
+
+schema 檢查會下載官方 OPDS 1.2 RNC、從 RFC 4287 附錄擷取 Atom RNC，並用 Trang 轉成 RELAX NG XML 後交給 lxml。工具僅存在暫存目錄，不增加應用程式依賴。官方 OPDS RNC 的 URI 正規表示式誤寫成 `\nrt`，會拒絕字面 `r` / `t`，連 `http` 都無法通過；驗證程式保留原始 `opds.rnc`，只在 `opds-iri-fixed.rnc` 修正為 `\n\r\t`。不能把結果稱為「未修改官方 schema 全數通過」。schema 之外的條件另由 PHP／HTTP 檢查涵蓋。
+
+### 部署與相容性限制
+
+- 保留並備份 `data/opds-identity.json`；重建 image 不應重建此檔。獨立建立的新站會取得不同 ID，搬站則應一起搬移此檔。首次升級後 ID 會改變，閱讀器可能需要重新整理目錄快取。
+- 沒有 Calibre UUID 的項目以書庫內相對路徑識別；修改相對檔名或目錄會視為新項目。保留相對路徑搬移整個書庫、變更網域或重建 SQLite row ID，不影響識別碼。
+- 索引指向已刪除原檔時，該項目不會輸出，但總數提示仍以索引為準；重建索引後會一致。
+- 預設 nginx 提供 HTTP；正式部署須配置可提供 TLS 1.3 或後續版本的 HTTPS 反向代理，並正確設定 `SITE_BASE_URL`。本次未驗證正式站 TLS、實體閱讀器或正式 nginx / X-Accel 環境，因此不宣稱正式部署已完成所有相容性驗收。
+
 ## 登入與魔術登入
 
 一般登入：

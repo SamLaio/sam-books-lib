@@ -11,6 +11,7 @@ use Calibre\LibraryIndex;
 use Calibre\ScanService;
 use Calibre\Services\OpdsAssetService;
 use Calibre\Services\AuthService;
+use Calibre\Support\OpdsErrorResponse;
 
 /**
  * Emit OPDS-compatible XML error to avoid client-side "failed to parse feed"
@@ -18,33 +19,7 @@ use Calibre\Services\AuthService;
  */
 function emitOpdsAuthError(int $status, string $title, string $detail): void
 {
-    http_response_code($status);
-    header('Content-Type: application/atom+xml;profile=opds-catalog;kind=navigation; charset=UTF-8');
-    header('X-Content-Type-Options: nosniff');
-
-    $dom = new DOMDocument('1.0', 'UTF-8');
-    $dom->formatOutput = true;
-
-    $feed = $dom->createElementNS('http://www.w3.org/2005/Atom', 'feed');
-    $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:opds', 'http://opds-spec.org/2010/catalog');
-    $dom->appendChild($feed);
-
-    $id = $dom->createElementNS('http://www.w3.org/2005/Atom', 'id', 'urn:bookslib:opds:error');
-    $feed->appendChild($id);
-    $feed->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'title', $title));
-    $feed->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'updated', gmdate(DATE_ATOM)));
-
-    $entry = $dom->createElementNS('http://www.w3.org/2005/Atom', 'entry');
-    $feed->appendChild($entry);
-    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'id', 'urn:bookslib:opds:error:auth'));
-    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'title', $title));
-    $entry->appendChild($dom->createElementNS('http://www.w3.org/2005/Atom', 'updated', gmdate(DATE_ATOM)));
-    $summary = $dom->createElementNS('http://www.w3.org/2005/Atom', 'summary', $detail);
-    $summary->setAttribute('type', 'text');
-    $entry->appendChild($summary);
-
-    echo $dom->saveXML() ?: '';
-    exit;
+    OpdsErrorResponse::send($status, $title, $detail, strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
 }
 
 function logOpdsAuthEvent(string $message): void
@@ -96,20 +71,14 @@ function streamOpdsAsset(array $asset, string $requestMethod, bool $attachment, 
 
     $handle = fopen((string) ($asset['path'] ?? ''), 'rb');
     if ($handle === false) {
-        http_response_code(500);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo "Cannot open file.\n";
-        exit;
+        emitOpdsAuthError(500, 'OPDS Error', 'Cannot open file.');
     }
 
     while (!feof($handle)) {
         $chunk = fread($handle, 8192);
         if ($chunk === false) {
             fclose($handle);
-            http_response_code(500);
-            header('Content-Type: text/plain; charset=UTF-8');
-            echo "Cannot read file.\n";
-            exit;
+            emitOpdsAuthError(500, 'OPDS Error', 'Cannot read file.');
         }
 
         echo $chunk;
@@ -123,20 +92,14 @@ function handleOpdsAssetShortcut(array $server, array $query, AuthService $authS
 {
     $requestMethod = strtoupper((string) ($server['REQUEST_METHOD'] ?? 'GET'));
     if (!in_array($requestMethod, ['GET', 'HEAD'], true)) {
-        http_response_code(405);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo "Method not allowed.\n";
-        exit;
+        emitOpdsAuthError(405, 'OPDS Error', 'Method not allowed.');
     }
 
     $bookId = filter_var($query['id'] ?? null, FILTER_VALIDATE_INT, [
         'options' => ['min_range' => 1],
     ]);
     if ($bookId === false || $bookId === null) {
-        http_response_code(400);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo "Invalid book id.\n";
-        exit;
+        emitOpdsAuthError(400, 'OPDS Error', 'Invalid book id.');
     }
 
     $scanService = new ScanService(__DIR__);
@@ -183,6 +146,11 @@ function handleOpdsAssetShortcut(array $server, array $query, AuthService $authS
 $authService = new AuthService(__DIR__);
 
 $query = $_GET;
+foreach ($query as $value) {
+    if (!is_scalar($value)) {
+        emitOpdsAuthError(400, 'OPDS Error', 'Invalid OPDS parameter.');
+    }
+}
 $opdsPath = trim((string) ($query['opds_path'] ?? ''), '/');
 unset($query['opds_path']);
 
@@ -307,15 +275,9 @@ if (in_array($resolvedFeed, ['cover', 'download'], true)) {
     try {
         handleOpdsAssetShortcut($_SERVER, $query, $authService);
     } catch (HttpException $e) {
-        http_response_code($e->getStatusCode());
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo $e->getMessage();
-        exit;
+        emitOpdsAuthError($e->getStatusCode(), 'OPDS Error', $e->getMessage());
     } catch (\Throwable $e) {
-        http_response_code(500);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo $e->getMessage();
-        exit;
+        emitOpdsAuthError(500, 'OPDS Error', $e->getMessage());
     }
 }
 

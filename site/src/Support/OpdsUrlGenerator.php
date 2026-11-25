@@ -99,7 +99,9 @@ final class OpdsUrlGenerator
 
     private function buildBaseDirectory(string $basePath): string
     {
-        $directory = str_replace('\\', '/', dirname($basePath));
+        // Token paths are below /opds, but public assets remain at the site root.
+        $catalogPath = preg_replace('#/opds(?:\.php)?(?:/.*)?$#', '/opds', $basePath) ?? $basePath;
+        $directory = str_replace('\\', '/', dirname($catalogPath));
 
         if ($directory === '.' || $directory === '') {
             return '/';

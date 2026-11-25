@@ -10,6 +10,7 @@ use Calibre\Services\OpdsService;
 use Calibre\Services\AuthService;
 use Calibre\Support\CatalogRequest;
 use Calibre\Support\Lang;
+use Calibre\Support\OpdsErrorResponse;
 
 final class OpdsController
 {
@@ -295,10 +296,7 @@ final class OpdsController
 
     private function failResponse(int $status, string $message): void
     {
-        http_response_code($status);
-        header('Content-Type: text/plain; charset=UTF-8');
-        echo $message;
-        exit;
+        OpdsErrorResponse::send($status, 'OPDS Error', $message, strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET')));
     }
 
     private function buildAttachmentDisposition(string $name): string

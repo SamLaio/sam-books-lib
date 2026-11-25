@@ -14,9 +14,8 @@ final class OpdsService
     private const OPDS_NS = 'http://opds-spec.org/2010/catalog';
     private const OPENSEARCH_NS = 'http://a9.com/-/spec/opensearch/1.1/';
     private const THR_NS = 'http://purl.org/syndication/thread/1.0';
-    private const DC_NS = 'http://purl.org/dc/elements/1.1/';
     private const DCTERMS_NS = 'http://purl.org/dc/terms/';
-    private const ROOT_FEED_ID = 'urn:uuid:2853dacf-ed79-42f5-8e8a-a7bb3d1ae6a2';
+    private const CALIBRE_NS = 'http://calibre.kovidgoyal.net/2009/metadata';
     private const CATALOG_ICON_PATH = 'assets/opds/catalog.svg';
 
     private string $appRoot;
@@ -25,6 +24,7 @@ final class OpdsService
     private int $pageSize;
     private LibraryIndex $index;
     private OpdsAssetService $assetService;
+    private ?string $catalogId = null;
 
     public function __construct(
         string $appRoot,
@@ -37,7 +37,7 @@ final class OpdsService
         $this->siteTitle = $scanService->getSiteTitle();
         $this->siteBaseUrl = $scanService->getSiteBaseUrl();
         $this->pageSize = $scanService->getOpdsPageSize();
-        $this->index = $index ?? new LibraryIndex($scanService->getSqlitePath());
+        $this->index = $index ?? new LibraryIndex($scanService->getSqlitePath(), $this->appRoot);
         $this->assetService = $assetService ?? new OpdsAssetService($this->appRoot, $scanService);
     }
 
@@ -231,8 +231,9 @@ final class OpdsService
         $root = $dom->createElementNS(self::OPENSEARCH_NS, 'OpenSearchDescription');
         $dom->appendChild($root);
 
-        $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'ShortName', $this->siteTitle);
-        $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'Description', $this->siteTitle . ' OPDS catalog');
+        $title = strip_tags($this->siteTitle);
+        $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'ShortName', mb_substr($title, 0, 16, 'UTF-8'));
+        $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'Description', mb_substr($title . ' OPDS catalog', 0, 1024, 'UTF-8'));
         $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'InputEncoding', 'UTF-8');
         $this->appendTextElement($dom, $root, self::OPENSEARCH_NS, 'OutputEncoding', 'UTF-8');
 
@@ -248,7 +249,7 @@ final class OpdsService
     {
         $dom = $this->createFeedDocument(
             $this->siteTitle,
-            self::ROOT_FEED_ID,
+            $this->catalogId(),
             $urls->index(),
             'navigation',
             $urls,
@@ -295,7 +296,7 @@ final class OpdsService
                 'title' => 'All books',
                 'summary' => sprintf('Alphabetical index of the %d books', $bookCount),
                 'href' => $urls->feed('books'),
-                'kind' => 'navigation',
+                'kind' => 'acquisition',
                 'rel' => 'subsection',
                 'count' => $bookCount,
             ],
@@ -311,7 +312,7 @@ final class OpdsService
                 'title' => 'Read Books',
                 'summary' => sprintf('%d books marked as read', $readCount),
                 'href' => $urls->feed('read'),
-                'kind' => 'navigation',
+                'kind' => 'acquisition',
                 'rel' => 'subsection',
                 'count' => $readCount,
             ],
@@ -319,7 +320,7 @@ final class OpdsService
                 'title' => 'Unread Books',
                 'summary' => sprintf('%d books not marked as read', $unreadCount),
                 'href' => $urls->feed('unread'),
-                'kind' => 'navigation',
+                'kind' => 'acquisition',
                 'rel' => 'subsection',
                 'count' => $unreadCount,
             ],
@@ -332,7 +333,7 @@ final class OpdsService
                 $feed,
                 $entry['title'],
                 $entry['href'],
-                $entry['href'],
+                $this->catalogEntryId('navigation:' . $entry['title']),
                 $updatedAt,
                 $entry['summary'],
                 $entry['kind'],
@@ -397,7 +398,7 @@ final class OpdsService
 
         $dom = $this->createFeedDocument(
             $title,
-            $urls->feed($feedName, $this->offsetParams($offset)),
+            $this->catalogEntryId('feed:' . $feedName),
             $urls->feed($feedName, $this->offsetParams($offset)),
             'navigation',
             $urls,
@@ -419,7 +420,7 @@ final class OpdsService
                 $feed,
                 $item['value'],
                 $urls->feed($targetFeed, ['value' => $item['value']]),
-                $urls->feed($targetFeed, ['value' => $item['value']]),
+                $this->catalogEntryId('facet:' . $facet . ':' . $item['value']),
                 $updatedAt,
                 $summary,
                 'acquisition',
@@ -513,7 +514,7 @@ final class OpdsService
 
         $dom = $this->createFeedDocument(
             $title,
-            $selfUrl,
+            $this->catalogEntryId('feed:' . $feedName . ':' . http_build_query($baseParams, '', '&', PHP_QUERY_RFC3986)),
             $selfUrl,
             'acquisition',
             $urls,
@@ -550,7 +551,6 @@ final class OpdsService
         $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:opds', self::OPDS_NS);
         $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:opensearch', self::OPENSEARCH_NS);
         $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:thr', self::THR_NS);
-        $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:dc', self::DC_NS);
         $feed->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:dcterms', self::DCTERMS_NS);
         $dom->appendChild($feed);
 
@@ -690,20 +690,36 @@ final class OpdsService
 
     private function appendBookEntry(\DOMDocument $dom, \DOMElement $feed, array $book, OpdsUrlGenerator $urls): void
     {
+        $downloads = $this->assetService->listDownloadablesForBook($book);
+        if ($downloads === []) {
+            return;
+        }
+
         $entry = $dom->createElementNS(self::ATOM_NS, 'entry');
         $feed->appendChild($entry);
 
         $metadata = $this->decodeMetadata($book);
         $bookId = (int) ($book['id'] ?? 0);
         $bookUuid = trim((string) ($book['uuid'] ?? ''));
-        $entryId = $bookUuid !== '' ? 'urn:uuid:' . $bookUuid : 'urn:calibre:book:' . $bookId;
+        // One index record per format: a Calibre UUID alone can identify multiple entries.
+        $relativePath = str_replace('\\', '/', (string) ($book['path'] ?? ''));
+        $libraryRoot = rtrim(str_replace('\\', '/', $this->assetService->getLibraryPath()), '/');
+        if (str_starts_with($relativePath, $libraryRoot . '/')) {
+            $relativePath = substr($relativePath, strlen($libraryRoot) + 1);
+        }
+        $formats = array_column($downloads, 'format');
+        sort($formats);
+        $entryId = $this->catalogEntryId('book:' . ($bookUuid !== '' ? $bookUuid . ':' . implode(',', $formats) : $relativePath));
         $updatedAt = $this->bookUpdatedAt($book);
         $publishedAt = $this->bookPublishedAt($book);
 
         $this->appendTextElement($dom, $entry, self::ATOM_NS, 'title', trim((string) ($book['title'] ?? 'Untitled')));
         $this->appendTextElement($dom, $entry, self::ATOM_NS, 'id', $entryId);
         $this->appendTextElement($dom, $entry, self::ATOM_NS, 'updated', $updatedAt);
-        $this->appendTextElement($dom, $entry, self::ATOM_NS, 'published', $publishedAt);
+        $importedAt = $this->normalizeDateValue($book['library_timestamp'] ?? $book['created_at'] ?? null);
+        if ($importedAt !== null) {
+            $this->appendTextElement($dom, $entry, self::ATOM_NS, 'published', $importedAt);
+        }
 
         foreach ($this->splitCsv((string) ($book['author'] ?? 'Unknown')) as $authorName) {
             $author = $dom->createElementNS(self::ATOM_NS, 'author');
@@ -713,29 +729,45 @@ final class OpdsService
         }
 
         $summary = $this->extractDescription($book, $metadata);
-        if ($summary !== null) {
-            $summaryNode = $dom->createElementNS(self::ATOM_NS, 'summary');
-            $summaryNode->setAttribute('type', 'text');
-            $summaryNode->appendChild($dom->createTextNode($summary));
-            $entry->appendChild($summaryNode);
+        // Atom requires content or an alternate link, even with a summary/acquisition link.
+        $this->appendTextElement($dom, $entry, self::ATOM_NS, 'content', $summary ?? '');
+
+        $identifier = trim((string) ($metadata['identifier'] ?? ''));
+        if ($identifier !== '') {
+            $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:identifier', $identifier);
+        }
+        if ($bookUuid !== '') {
+            $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:identifier', 'urn:uuid:' . $bookUuid);
+        }
+        foreach (['series_index', 'author_sort'] as $field) {
+            $value = $book[$field] ?? $metadata[$field] ?? null;
+            if ($value !== null && $value !== '') {
+                $this->appendTextElement($dom, $entry, self::CALIBRE_NS, 'calibre:' . $field, (string) $value);
+            }
+        }
+        $rights = trim((string) ($metadata['rights'] ?? ''));
+        if ($rights !== '') {
+            $this->appendTextElement($dom, $entry, self::ATOM_NS, 'rights', $rights);
         }
 
         $publisher = trim((string) ($book['publisher'] ?? ($metadata['publisher'] ?? '')));
         if ($publisher !== '') {
-            $this->appendTextElement($dom, $entry, self::DC_NS, 'dc:publisher', $publisher);
+            $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:publisher', $publisher);
         }
 
         $language = trim((string) ($book['language'] ?? ($metadata['language'] ?? '')));
         if ($language !== '') {
-            $this->appendTextElement($dom, $entry, self::DC_NS, 'dc:language', $language);
+            foreach ($this->splitCsv($language) as $value) {
+                $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:language', $value);
+            }
         }
 
         $isbn = trim((string) ($book['isbn'] ?? ($metadata['isbn'] ?? '')));
         if ($isbn !== '') {
-            $this->appendTextElement($dom, $entry, self::DC_NS, 'dc:identifier', $isbn);
+            $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:identifier', $isbn);
         }
 
-        if ($publishedAt !== '') {
+        if ($publishedAt !== null) {
             $this->appendTextElement($dom, $entry, self::DCTERMS_NS, 'dcterms:issued', $publishedAt);
         }
 
@@ -751,7 +783,7 @@ final class OpdsService
             $category = $dom->createElementNS(self::ATOM_NS, 'category');
             $category->setAttribute('term', $series);
             $category->setAttribute('label', $series);
-            $category->setAttribute('scheme', 'series');
+            $category->setAttribute('scheme', self::CALIBRE_NS . '#series');
             $entry->appendChild($category);
         }
 
@@ -767,7 +799,7 @@ final class OpdsService
             $this->appendLink($dom, $entry, $imageRel, $coverUrl, $coverType);
         }
 
-        foreach ($this->assetService->listDownloadablesForBook($book) as $download) {
+        foreach ($downloads as $download) {
             $link = $dom->createElementNS(self::ATOM_NS, 'link');
             $link->setAttribute('rel', 'http://opds-spec.org/acquisition');
             $link->setAttribute('href', $urls->download(
@@ -781,7 +813,7 @@ final class OpdsService
 
             $modifiedAt = trim((string) ($download['modified_at'] ?? ''));
             if ($modifiedAt !== '') {
-                $link->setAttribute('mtime', $modifiedAt);
+                $link->setAttributeNS(self::CALIBRE_NS, 'calibre:mtime', $modifiedAt);
             }
 
             $entry->appendChild($link);
@@ -990,16 +1022,58 @@ final class OpdsService
         return $this->currentTimestamp();
     }
 
-    private function bookPublishedAt(array $book): string
+    private function bookPublishedAt(array $book): ?string
     {
-        foreach (['published_at', 'library_timestamp', 'created_at'] as $key) {
-            $value = $this->normalizeDateValue($book[$key] ?? null);
-            if ($value !== null) {
-                return $value;
-            }
-        }
+        return $this->normalizeDateValue($book['published_at'] ?? null);
+    }
 
-        return $this->currentTimestamp();
+    private function catalogId(): string
+    {
+        if ($this->catalogId !== null) {
+            return $this->catalogId;
+        }
+        $directory = $this->appRoot . DIRECTORY_SEPARATOR . 'data';
+        if (!is_dir($directory) && !mkdir($directory, 0777, true) && !is_dir($directory)) {
+            throw new \RuntimeException('Cannot create OPDS identity directory.');
+        }
+        $handle = fopen($directory . DIRECTORY_SEPARATOR . 'opds-identity.json', 'c+');
+        if ($handle === false) {
+            throw new \RuntimeException('Cannot open OPDS identity.');
+        }
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new \RuntimeException('Cannot lock OPDS identity.');
+            }
+            $stored = stream_get_contents($handle);
+            $identity = json_decode($stored === false ? '' : $stored, true);
+            if (is_array($identity) && is_string($identity['id'] ?? null)
+                && preg_match('/^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/D', $identity['id']) === 1) {
+                return $this->catalogId = $identity['id'];
+            }
+            if ($stored !== '') {
+                throw new \RuntimeException('Invalid OPDS identity; restore data/opds-identity.json from backup.');
+            }
+            $bytes = random_bytes(16);
+            $bytes[6] = chr((ord($bytes[6]) & 0x0f) | 0x40);
+            $bytes[8] = chr((ord($bytes[8]) & 0x3f) | 0x80);
+            $hex = bin2hex($bytes);
+            $id = 'urn:uuid:' . substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+                . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20);
+            $json = json_encode(['id' => $id], JSON_THROW_ON_ERROR) . "\n";
+            rewind($handle);
+            if (fwrite($handle, $json) !== strlen($json) || !fflush($handle)) {
+                throw new \RuntimeException('Cannot persist OPDS identity.');
+            }
+            return $this->catalogId = $id;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
+    private function catalogEntryId(string $key): string
+    {
+        return 'urn:bookslib:opds:' . hash('sha256', $this->catalogId() . ':' . $key);
     }
 
     private function normalizeDateValue($value): ?string
